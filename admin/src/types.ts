@@ -52,13 +52,13 @@ export interface Ride {
   payment_status?: string
   created_at?: string
   started_at?: string
-  rider?: {name?: string; phone?: string} | null
+  rider?: { name?: string; phone?: string } | null
 }
 
 export interface DashboardData {
   users: Record<'total' | 'active' | 'inactive' | 'blocked', number>
   drivers: Record<'total' | 'active' | 'inactive' | 'blocked', number>
-  cabs: {total: number; live: number}
+  cabs: { total: number; live: number }
   rides: {
     total: number
     ongoing: number
@@ -74,4 +74,19 @@ export interface DashboardData {
     commission_records: boolean
   }
   generated_at: string
+}
+
+export interface MonitoringDriver extends Driver {
+  current_ride: Ride | null
+}
+
+export interface MonitoringPageData extends Page<MonitoringDriver> {
+  generated_at: string
+}
+
+export interface RevenueData {
+  period: string
+  revenue_by_period: { _id: string; revenue: number; rides: number }[]
+  driver_earnings: { _id: string; earnings: number; rides: number; driver: Driver }[]
+  cab_earnings: { _id: string; earnings: number; rides: number; driver: Driver }[]
 }
