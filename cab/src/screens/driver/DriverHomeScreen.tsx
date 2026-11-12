@@ -14,7 +14,11 @@ import {colors, fonts, spacing} from '../../theme';
 import {useAuth} from '../../context/AuthContext';
 import Api from '../../config/Api';
 import {watchLocation} from '../../services/location';
+import {connectDriverSocket} from '../../services/driverSocket';
+import type {Socket} from 'socket.io-client';
 import {useIsFocused} from '@react-navigation/native';
+import LiveMap from '../../components/LiveMap';
+import {useLocation} from '../../context/LocationContext';
 
 interface DriverHomeScreenProps {
   navigation: any;
@@ -22,10 +26,12 @@ interface DriverHomeScreenProps {
 
 const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
   const {driver, setDriverOnline, updateDriverProfile, logout} = useAuth();
+  const {currentLocation} = useLocation();
   const isFocused = useIsFocused();
   const [incomingBooking, setIncomingBooking] = useState<Record<string, any> | null>(null);
   const [earnings, setEarnings] = useState(0);
   const [completedRides, setCompletedRides] = useState(0);
+  const [lastLocation, setLastLocation] = useState(currentLocation);
 
   const loadBookings = async () => {
     try {
@@ -51,24 +57,73 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
           totalTrips: response.data.completed_rides || 0,
         });
       })
-      .catch(() => undefined);
+      .catch((error: any) =>
+        Alert.alert('Could not load driver profile', error.response?.data?.detail || 'Check your connection and try again.'),
+      );
     Api.get('/driver/transactions')
       .then(response => {
         const rows = response.data as Record<string, any>[];
-        setEarnings(rows.reduce((sum, item) => sum + Number(item.amount || 0), 0));
-        setCompletedRides(rows.length);
+        const today = new Date().toDateString();
+        const todayRows = rows.filter(
+          item => item.created_at && new Date(item.created_at).toDateString() === today,
+        );
+        setEarnings(todayRows.reduce((sum, item) => sum + Number(item.amount || 0), 0));
+        setCompletedRides(todayRows.length);
       })
-      .catch(() => undefined);
+      .catch((error: any) =>
+        Alert.alert('Could not load earnings', error.response?.data?.detail || 'Check your connection and try again.'),
+      );
     const timer = setInterval(loadBookings, 5000);
     return () => clearInterval(timer);
   }, [setDriverOnline, updateDriverProfile]);
 
   useEffect(() => {
     if (!driver.isOnline || !isFocused) return;
-    return watchLocation(coordinates => {
-      Api.patch('/driver/location', coordinates).catch(() => undefined);
+    let active = true;
+    let socket: Socket | null = null;
+    let sendLocation: ((coordinates: {latitude: number; longitude: number}) => void) | null = null;
+    let latestCoordinates: {latitude: number; longitude: number} | null = null;
+    const stopWatching = watchLocation(coordinates => {
+      latestCoordinates = coordinates;
+      setLastLocation(coordinates);
+      sendLocation?.(coordinates);
     });
+
+    connectDriverSocket(
+      message => {
+        if (active) console.warn('Driver location socket:', message);
+      },
+    )
+      .then(connection => {
+        if (!active) {
+          connection.socket.disconnect();
+          return;
+        }
+        socket = connection.socket;
+        sendLocation = connection.sendLocation;
+        connection.socket.on('ride_request', loadBookings);
+        if (latestCoordinates) connection.sendLocation(latestCoordinates);
+      })
+      .catch(error => {
+        if (active) {
+          Alert.alert(
+            'Live location unavailable',
+            error instanceof Error ? error.message : 'Could not connect to live location service.',
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+      stopWatching();
+      socket?.disconnect();
+      sendLocation = null;
+    };
   }, [driver.isOnline, isFocused]);
+
+  useEffect(() => {
+    setLastLocation(currentLocation);
+  }, [currentLocation]);
 
   const handleAcceptRide = async () => {
     if (!incomingBooking) return;
@@ -161,15 +216,7 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
 
         {/* Map Area */}
         <View style={styles.mapContainer}>
-          <View style={styles.mapGrid}>
-            <View style={styles.mapRoadHorizontal} />
-            <View style={styles.mapRoadVertical} />
-          </View>
-
-          <View style={styles.driverPin}>
-            <Text style={styles.driverPinEmoji}>🚕</Text>
-          </View>
-
+          <LiveMap current={lastLocation} style={styles.liveMap} />
           <View style={styles.mapStatusBanner}>
             <View
               style={[
@@ -217,9 +264,6 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
               <View>
                 <Text style={styles.riderName}>{incomingBooking?.rider_name || 'Passenger'}</Text>
                 <Text style={styles.riderMeta}>{incomingBooking?.payment_method || 'Cash'} • {incomingBooking?.cab_type || 'Cab'}</Text>
-              </View>
-              <View style={styles.distanceBadge}>
-                <Text style={styles.distanceText}>1.2 km away</Text>
               </View>
             </View>
 
@@ -371,39 +415,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     position: 'relative',
   },
-  mapGrid: {
-    ...StyleSheet.absoluteFill,
-  },
-  mapRoadHorizontal: {
-    position: 'absolute',
-    top: 100,
-    left: -20,
-    right: -20,
-    height: 24,
-    backgroundColor: '#FFFFFF',
-  },
-  mapRoadVertical: {
-    position: 'absolute',
-    left: 140,
-    top: -20,
-    bottom: -20,
-    width: 22,
-    backgroundColor: '#FFFFFF',
-  },
-  driverPin: {
-    position: 'absolute',
-    top: 92,
-    left: 130,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-  },
-  driverPinEmoji: {
-    fontSize: 24,
+  liveMap: {
+    height: '100%',
   },
   mapStatusBanner: {
     position: 'absolute',
@@ -448,18 +461,6 @@ const styles = StyleSheet.create({
   switchChevron: {
     color: colors.textSecondary,
     fontSize: 20,
-  },
-  simulateRequestButton: {
-    backgroundColor: colors.secondary,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  simulateRequestText: {
-    color: colors.primary,
-    fontSize: 14,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
   },
   modalOverlay: {
     flex: 1,
@@ -513,18 +514,6 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontSize: 12,
     fontFamily: fonts.medium,
-  },
-  distanceBadge: {
-    marginLeft: 'auto',
-    backgroundColor: colors.background,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  distanceText: {
-    color: colors.text,
-    fontSize: 11,
-    fontFamily: fonts.bold,
   },
   routeBox: {
     backgroundColor: colors.background,

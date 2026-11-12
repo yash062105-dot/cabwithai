@@ -12,6 +12,7 @@ from pymongo.errors import PyMongoError
 from .allocation import DEFAULT_WEIGHTS, rank_drivers
 from .admin_routes import analysis as build_analysis
 from .admin_routes import router as admin_router
+from .admin_data import router as admin_data_router
 from .auth_routes import router as auth_router
 from .booking_routes import router as booking_router
 from .dependencies import require_admin
@@ -49,6 +50,7 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(admin_data_router)
 app.include_router(booking_router)
 
 

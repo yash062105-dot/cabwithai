@@ -46,5 +46,4 @@ def main() -> None:
         print(f"Admin account created: {phone or email}")
 
 
-if __name__ == "__main__":
-    main()
+main()

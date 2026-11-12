@@ -1,75 +1,33 @@
-# React + TypeScript + Vite
+# CAB Admin Console
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The React + TypeScript admin console reads and updates live platform data through the FastAPI admin API. It does not use mock dashboard data or a WebSocket connection.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Start the backend and configure its `FRONTEND_ORIGINS` to include the admin origin (Vite defaults to `http://localhost:5173`).
+2. Set `VITE_API_URL` if the backend is not at `http://localhost:8000`.
+3. Install dependencies and start the console:
 
-## React Compiler
+   ```sh
+   pnpm install
+   pnpm dev
+   ```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Sign in with the provisioned administrator email and password. Admin accounts are provisioned by the backend bootstrap process.
 
-## Expanding the ESLint configuration
+## Modules
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Overview: account, fleet, ride, and recorded-payment summaries.
+- Users and drivers: server-side search, status/date filters, pagination, account details, and audited status changes.
+- Cabs and live monitoring: registered vehicles, current driver coordinates, and assigned ride details. Monitoring refreshes through REST polling.
+- Rides: server-side ride filters and complete booking/payment details.
+- Revenue: daily, weekly, and monthly aggregates from completed ride payment and driver earning ledger records.
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+Platform commission is not calculated because no commission policy or commission ledger is configured.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Validation
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
-```
-
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+pnpm run build
+pnpm run lint
 ```

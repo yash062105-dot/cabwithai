@@ -14,6 +14,8 @@ import { colors, fonts, spacing } from '../../theme';
 import Api from '../../config/Api';
 import LiveMap from '../../components/LiveMap';
 import { Coordinates, watchLocation } from '../../services/location';
+import {connectDriverSocket} from '../../services/driverSocket';
+import type {Socket} from 'socket.io-client';
 
 interface DriverRideScreenProps {
   navigation: any;
@@ -58,14 +60,45 @@ const DriverRideScreen = ({ navigation, route }: DriverRideScreenProps) => {
     loadBooking();
   }, [bookingId]);
 
-  useEffect(
-    () =>
-      watchLocation(coordinates => {
-        setDriverLocation(coordinates);
-        Api.patch('/driver/location', coordinates).catch(() => undefined);
-      }),
-    [],
-  );
+  useEffect(() => {
+    let active = true;
+    let socket: Socket | null = null;
+    let sendLocation: ((coordinates: Coordinates) => void) | null = null;
+    let latestCoordinates: Coordinates | null = null;
+    const stopWatching = watchLocation(coordinates => {
+      latestCoordinates = coordinates;
+      setDriverLocation(coordinates);
+      sendLocation?.(coordinates);
+    });
+
+    connectDriverSocket(message => {
+      if (active) console.warn('Driver location socket:', message);
+    })
+      .then(connection => {
+        if (!active) {
+          connection.socket.disconnect();
+          return;
+        }
+        socket = connection.socket;
+        sendLocation = connection.sendLocation;
+        if (latestCoordinates) sendLocation(latestCoordinates);
+      })
+      .catch(error => {
+        if (active) {
+          Alert.alert(
+            'Live location unavailable',
+            error instanceof Error ? error.message : 'Could not connect to live location service.',
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+      stopWatching();
+      socket?.disconnect();
+      sendLocation = null;
+    };
+  }, []);
 
   const handleArrived = () => {
     setStage('arrived');

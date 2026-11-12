@@ -40,14 +40,19 @@ def ensure_indexes() -> None:
         pass
     db.users.create_index([("email", ASCENDING)], unique=True, sparse=True, name="email_unique_sparse")
     db.users.create_index([("phone", ASCENDING)], unique=True, sparse=True, name="phone_unique_sparse")
+    db.users.create_index([("role", ASCENDING), ("status", ASCENDING), ("created_at", DESCENDING)])
     db.drivers.create_index([("driver_id", ASCENDING)], unique=True)
     db.drivers.create_index([("phone", ASCENDING)], unique=True, sparse=True, name="driver_phone_unique_sparse")
+    db.drivers.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
     db.drivers.update_many({"role": {"$exists": False}}, {"$set": {"role": "driver"}})
     db.otp_codes.create_index([("expires_at", ASCENDING)], expireAfterSeconds=0)
     db.bookings.create_index([("created_at", DESCENDING)])
     db.assignments.create_index([("created_at", DESCENDING)])
     db.transactions.create_index([("user_id", ASCENDING), ("created_at", DESCENDING)])
     db.transactions.create_index([("driver_id", ASCENDING), ("created_at", DESCENDING)])
+    db.transactions.create_index([("type", ASCENDING), ("direction", ASCENDING), ("created_at", DESCENDING)])
+    db.transactions.create_index([("booking_id", ASCENDING), ("type", ASCENDING)])
+    db.admin_activity.create_index([("created_at", DESCENDING)])
 
 
 def database_health() -> dict[str, Any]:

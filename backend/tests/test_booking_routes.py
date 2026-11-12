@@ -6,7 +6,11 @@ from backend.booking_routes import cab_options, driver_transactions
 def test_cab_options_are_limited_to_available_driver_types(monkeypatch):
     class Drivers:
         def find(self, query):
-            assert query == {"available": True, "role": "driver"}
+            assert query == {
+                "available": True,
+                "role": "driver",
+                "$or": [{"status": "active"}, {"status": {"$exists": False}}],
+            }
             return [
                 {"vehicle_type": "Sedan"},
                 {"vehicle_type": "Sedan"},

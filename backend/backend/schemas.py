@@ -5,6 +5,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+AccountStatus = Literal["active", "inactive", "blocked"]
+
 
 class EtaRequest(BaseModel):
     origin_lat: float = Field(ge=-90, le=90)
@@ -135,6 +137,19 @@ class DriverUpdateRequest(BaseModel):
     acceptance_rate: float | None = Field(default=None, ge=0, le=1)
 
 
+class AccountStatusRequest(BaseModel):
+    status: AccountStatus
+
+
+class AccountProfile(BaseModel):
+    id: str
+    name: str
+    phone: str | None = None
+    role: Literal["user", "driver", "admin"]
+    status: AccountStatus = "active"
+    email: str | None = None
+
+
 class BookingCreateRequest(BaseModel):
     pickup_lat: float = Field(ge=-90, le=90)
     pickup_lon: float = Field(ge=-180, le=180)
@@ -155,7 +170,7 @@ class RideActionRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    user: dict
+    user: AccountProfile
     driver_access_token: str | None = None
 
 

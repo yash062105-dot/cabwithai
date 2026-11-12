@@ -44,7 +44,9 @@ def test_driver_signup_creates_driver_and_returns_driver_token(monkeypatch):
 
     assert response.access_token == "driver-token"
     assert response.driver_access_token == "driver-token"
-    assert response.user["role"] == "driver"
+    assert response.user.role == "driver"
+    assert response.user.status == "inactive"
+    assert drivers.records[0]["status"] == "inactive"
     assert drivers.records[0]["phone"] == "+919888888888"
     assert drivers.records[0]["available"] is False
     assert drivers.records[0]["latitude"] == 26.9124
@@ -111,7 +113,11 @@ def test_driver_location_endpoint_persists_coordinates(monkeypatch):
         {"driver_id": "driver-test"},
     )
 
-    assert drivers.query == {"driver_id": "driver-test", "role": "driver"}
+    assert drivers.query == {
+        "driver_id": "driver-test",
+        "role": "driver",
+        "$or": [{"status": "active"}, {"status": {"$exists": False}}],
+    }
     assert drivers.update["$set"]["latitude"] == 26.9124
     assert drivers.update["$set"]["longitude"] == 75.7873
     assert result["latitude"] == 26.9124

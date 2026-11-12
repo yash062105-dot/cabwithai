@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pymongo.errors import DuplicateKeyError
@@ -61,7 +60,8 @@ def delete_user(user_id: str, admin: dict = Depends(require_admin)) -> dict:
     try:
         if object_id(user_id) == admin["_id"]:
             raise HTTPException(status_code=400, detail="You cannot delete your own admin account")
-        result = get_database().users.delete_one({"_id": object_id(user_id)})
+        db = get_database()
+        result = db.users.delete_one({"_id": object_id(user_id)})
     except HTTPException:
         raise
     except ValueError as exc:
@@ -70,6 +70,13 @@ def delete_user(user_id: str, admin: dict = Depends(require_admin)) -> dict:
         raise db_error(exc) from exc
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
+    db.admin_activity.insert_one({
+        "admin_id": str(admin["_id"]),
+        "action": "user.deleted",
+        "entity_type": "user",
+        "entity_id": user_id,
+        "created_at": datetime.now(timezone.utc),
+    })
     return {"message": "User deleted"}
 
 
@@ -83,7 +90,7 @@ def list_drivers(limit: int = Query(default=100, ge=1, le=200)) -> list[dict]:
 
 @router.post("/drivers", status_code=status.HTTP_201_CREATED)
 def create_driver(request: DriverCreateRequest) -> dict:
-    driver = {**request.model_dump(), "online": request.available, "role": "driver", "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
+    driver = {**request.model_dump(), "status": "inactive", "available": False, "online": False, "role": "driver", "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
     try:
         get_database().drivers.insert_one(driver)
     except DuplicateKeyError as exc:
@@ -113,8 +120,18 @@ def update_driver(driver_id: str, request: DriverUpdateRequest) -> dict:
         raise HTTPException(status_code=400, detail="No driver fields were provided")
     changes["updated_at"] = datetime.now(timezone.utc)
     try:
-        result = get_database().drivers.update_one({"driver_id": driver_id}, {"$set": changes})
-        driver = get_database().drivers.find_one({"driver_id": driver_id})
+        db = get_database()
+        existing = db.drivers.find_one({"driver_id": driver_id})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Driver not found")
+        if "available" in changes:
+            if changes["available"] and existing.get("status", "active") != "active":
+                raise HTTPException(status_code=409, detail="Only active drivers can be set available")
+            changes["online"] = changes["available"]
+        result = db.drivers.update_one({"driver_id": driver_id}, {"$set": changes})
+        driver = db.drivers.find_one({"driver_id": driver_id})
+    except HTTPException:
+        raise
     except Exception as exc:
         raise db_error(exc) from exc
     if result.matched_count == 0 or not driver:
@@ -123,13 +140,21 @@ def update_driver(driver_id: str, request: DriverUpdateRequest) -> dict:
 
 
 @router.delete("/drivers/{driver_id}")
-def delete_driver(driver_id: str) -> dict:
+def delete_driver(driver_id: str, admin: dict = Depends(require_admin)) -> dict:
     try:
-        result = get_database().drivers.delete_one({"driver_id": driver_id})
+        db = get_database()
+        result = db.drivers.delete_one({"driver_id": driver_id})
     except Exception as exc:
         raise db_error(exc) from exc
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Driver not found")
+    db.admin_activity.insert_one({
+        "admin_id": str(admin["_id"]),
+        "action": "driver.deleted",
+        "entity_type": "driver",
+        "entity_id": driver_id,
+        "created_at": datetime.now(timezone.utc),
+    })
     return {"message": "Driver deleted"}
 
 

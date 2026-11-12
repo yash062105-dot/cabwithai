@@ -10,6 +10,7 @@ from .allocation import DEFAULT_WEIGHTS, haversine_miles, rank_drivers
 from .dependencies import get_current_driver, get_current_user, require_user
 from .ml_service import EtaModelService
 from .mongodb import DatabaseNotConfigured, get_database, object_id
+from .realtime import emit_booking_status, emit_driver_event
 from .schemas import BookingCreateRequest, DriverLocationRequest, RideActionRequest
 
 router = APIRouter(tags=["bookings"])
@@ -52,7 +53,18 @@ def eta_service() -> EtaModelService:
 
 
 def active_drivers() -> list[dict]:
-    return list(get_database().drivers.find({"available": True, "role": "driver"}))
+    return list(
+        get_database().drivers.find(
+            {
+                "available": True,
+                "role": "driver",
+                "$or": [
+                    {"status": "active"},
+                    {"status": {"$exists": False}},
+                ],
+            }
+        )
+    )
 
 
 @router.get("/cab-options")
@@ -126,7 +138,7 @@ def nearest_drivers(
 
 
 @router.post("/bookings", status_code=status.HTTP_201_CREATED)
-def create_booking(request: BookingCreateRequest, user: dict = Depends(require_user)) -> dict:
+async def create_booking(request: BookingCreateRequest, user: dict = Depends(require_user)) -> dict:
     reserved_driver_id = None
     reserved_booking_id = None
     try:
@@ -193,6 +205,11 @@ def create_booking(request: BookingCreateRequest, user: dict = Depends(require_u
         }
         db.bookings.insert_one(booking)
         db.assignments.insert_one({"booking_id": booking_id, "user_id": str(user["_id"]), "driver_id": selected.driver_id, "status": "requested", "ranked_drivers": [asdict(item) for item in ranked], "weights": {**DEFAULT_WEIGHTS, **(request.weights or {})}, "created_at": now()})
+        await emit_driver_event(
+            selected.driver_id,
+            "ride_request",
+            serialize(booking),
+        )
         return serialize(booking)
     except HTTPException:
         raise
@@ -250,7 +267,13 @@ def set_driver_availability(available: bool, driver: dict = Depends(get_current_
         db = get_database()
         has_active_booking = db.bookings.find_one({"driver_id": driver["driver_id"], "status": {"$in": ["requested", "accepted", "in_progress"]}})
         result = db.drivers.update_one(
-            {"driver_id": driver["driver_id"]},
+            {
+                "driver_id": driver["driver_id"],
+                "$or": [
+                    {"status": "active"},
+                    {"status": {"$exists": False}},
+                ],
+            },
             {"$set": {"online": available, "available": available and not bool(has_active_booking), "updated_at": now()}},
         )
         if not result.matched_count:
@@ -267,7 +290,14 @@ def update_driver_location(request: DriverLocationRequest, driver: dict = Depend
     try:
         timestamp = now()
         result = get_database().drivers.update_one(
-            {"driver_id": driver["driver_id"], "role": "driver"},
+            {
+                "driver_id": driver["driver_id"],
+                "role": "driver",
+                "$or": [
+                    {"status": "active"},
+                    {"status": {"$exists": False}},
+                ],
+            },
             {"$set": {"latitude": request.latitude, "longitude": request.longitude, "last_location_at": timestamp, "updated_at": timestamp}},
         )
         if not result.matched_count:
@@ -294,31 +324,35 @@ def get_booking(booking_id: str, user: dict = Depends(get_current_user)) -> dict
 
 
 @router.post("/bookings/{booking_id}/cancel")
-def cancel_booking(booking_id: str, user: dict = Depends(require_user)) -> dict:
+async def cancel_booking(booking_id: str, user: dict = Depends(require_user)) -> dict:
     booking = booking_for_user_or_driver(booking_id, user=user)
     if booking["status"] not in {"requested", "accepted"}:
         raise HTTPException(status_code=409, detail="This booking cannot be cancelled now")
     try:
         db = get_database()
-        db.bookings.update_one({"_id": booking["_id"]}, {"$set": {"status": "cancelled", "updated_at": now(), "cancelled_at": now()}})
-        db.assignments.update_one({"booking_id": booking["_id"]}, {"$set": {"status": "cancelled", "updated_at": now()}})
+        updated_at = now()
+        db.bookings.update_one({"_id": booking["_id"]}, {"$set": {"status": "cancelled", "updated_at": updated_at, "cancelled_at": updated_at}})
+        db.assignments.update_one({"booking_id": booking["_id"]}, {"$set": {"status": "cancelled", "updated_at": updated_at}})
         driver = db.drivers.find_one({"driver_id": booking["driver_id"]}) or {}
-        db.drivers.update_one({"driver_id": booking["driver_id"], "current_booking_id": booking["_id"]}, {"$set": {"available": bool(driver.get("online", True)), "current_booking_id": None, "updated_at": now()}})
+        db.drivers.update_one({"driver_id": booking["driver_id"], "current_booking_id": booking["_id"]}, {"$set": {"available": bool(driver.get("online", True)), "current_booking_id": None, "updated_at": updated_at}})
+        await emit_booking_status({**booking, "status": "cancelled", "updated_at": updated_at})
         return {"message": "Booking cancelled", "booking_id": str(booking["_id"])}
     except Exception as exc:
         raise database_error(exc) from exc
 
 
 @router.post("/driver/bookings/{booking_id}/accept")
-def accept_booking(booking_id: str, driver: dict = Depends(get_current_driver)) -> dict:
+async def accept_booking(booking_id: str, driver: dict = Depends(get_current_driver)) -> dict:
     booking = booking_for_user_or_driver(booking_id, driver=driver)
     if booking["status"] != "requested":
         raise HTTPException(status_code=409, detail="Booking is not waiting for acceptance")
     try:
-        result = get_database().bookings.update_one({"_id": booking["_id"], "status": "requested"}, {"$set": {"status": "accepted", "accepted_at": now(), "updated_at": now()}})
+        updated_at = now()
+        result = get_database().bookings.update_one({"_id": booking["_id"], "status": "requested"}, {"$set": {"status": "accepted", "accepted_at": updated_at, "updated_at": updated_at}})
         if not result.modified_count:
             raise HTTPException(status_code=409, detail="Booking status changed")
-        get_database().assignments.update_one({"booking_id": booking["_id"]}, {"$set": {"status": "accepted", "updated_at": now()}})
+        get_database().assignments.update_one({"booking_id": booking["_id"]}, {"$set": {"status": "accepted", "updated_at": updated_at}})
+        await emit_booking_status({**booking, "status": "accepted", "updated_at": updated_at})
         return {"message": "Booking accepted", "booking_id": str(booking["_id"]), "status": "accepted"}
     except HTTPException:
         raise
@@ -327,17 +361,19 @@ def accept_booking(booking_id: str, driver: dict = Depends(get_current_driver)) 
 
 
 @router.post("/driver/bookings/{booking_id}/decline")
-def decline_booking(booking_id: str, driver: dict = Depends(get_current_driver)) -> dict:
+async def decline_booking(booking_id: str, driver: dict = Depends(get_current_driver)) -> dict:
     booking = booking_for_user_or_driver(booking_id, driver=driver)
     if booking["status"] != "requested":
         raise HTTPException(status_code=409, detail="Only requested bookings can be declined")
     try:
         db = get_database()
-        result = db.bookings.update_one({"_id": booking["_id"], "status": "requested"}, {"$set": {"status": "cancelled", "updated_at": now(), "cancelled_at": now(), "cancelled_by": "driver"}})
+        updated_at = now()
+        result = db.bookings.update_one({"_id": booking["_id"], "status": "requested"}, {"$set": {"status": "cancelled", "updated_at": updated_at, "cancelled_at": updated_at, "cancelled_by": "driver"}})
         if not result.modified_count:
             raise HTTPException(status_code=409, detail="Booking status changed")
-        db.assignments.update_one({"booking_id": booking["_id"]}, {"$set": {"status": "cancelled", "updated_at": now()}})
-        db.drivers.update_one({"driver_id": driver["driver_id"], "current_booking_id": booking["_id"]}, {"$set": {"available": bool(driver.get("online", True)), "current_booking_id": None, "updated_at": now()}})
+        db.assignments.update_one({"booking_id": booking["_id"]}, {"$set": {"status": "cancelled", "updated_at": updated_at}})
+        db.drivers.update_one({"driver_id": driver["driver_id"], "current_booking_id": booking["_id"]}, {"$set": {"available": bool(driver.get("online", True)), "current_booking_id": None, "updated_at": updated_at}})
+        await emit_booking_status({**booking, "status": "cancelled", "updated_at": updated_at})
         return {"message": "Booking declined", "booking_id": str(booking["_id"]), "status": "cancelled"}
     except HTTPException:
         raise
@@ -346,15 +382,17 @@ def decline_booking(booking_id: str, driver: dict = Depends(get_current_driver))
 
 
 @router.post("/driver/bookings/{booking_id}/start")
-def start_booking(booking_id: str, driver: dict = Depends(get_current_driver)) -> dict:
+async def start_booking(booking_id: str, driver: dict = Depends(get_current_driver)) -> dict:
     booking = booking_for_user_or_driver(booking_id, driver=driver)
     if booking["status"] != "accepted":
         raise HTTPException(status_code=409, detail="Only accepted bookings can start")
     try:
-        result = get_database().bookings.update_one({"_id": booking["_id"], "status": "accepted"}, {"$set": {"status": "in_progress", "started_at": now(), "updated_at": now()}})
+        updated_at = now()
+        result = get_database().bookings.update_one({"_id": booking["_id"], "status": "accepted"}, {"$set": {"status": "in_progress", "started_at": updated_at, "updated_at": updated_at}})
         if not result.modified_count:
             raise HTTPException(status_code=409, detail="Booking status changed")
-        get_database().assignments.update_one({"booking_id": booking["_id"]}, {"$set": {"status": "in_progress", "updated_at": now()}})
+        get_database().assignments.update_one({"booking_id": booking["_id"]}, {"$set": {"status": "in_progress", "updated_at": updated_at}})
+        await emit_booking_status({**booking, "status": "in_progress", "updated_at": updated_at})
         return {"message": "Ride started", "booking_id": str(booking["_id"]), "status": "in_progress"}
     except HTTPException:
         raise
@@ -363,7 +401,7 @@ def start_booking(booking_id: str, driver: dict = Depends(get_current_driver)) -
 
 
 @router.post("/driver/bookings/{booking_id}/complete")
-def complete_booking(booking_id: str, request: RideActionRequest, driver: dict = Depends(get_current_driver)) -> dict:
+async def complete_booking(booking_id: str, request: RideActionRequest, driver: dict = Depends(get_current_driver)) -> dict:
     booking = booking_for_user_or_driver(booking_id, driver=driver)
     if booking["status"] != "in_progress":
         raise HTTPException(status_code=409, detail="Only active rides can be completed")
@@ -379,6 +417,7 @@ def complete_booking(booking_id: str, request: RideActionRequest, driver: dict =
         base_transaction = {"booking_id": str(booking["_id"]), "driver_id": driver["driver_id"], "amount": fare, "currency": booking.get("currency", "INR"), "created_at": completed_at}
         db.transactions.insert_one({**base_transaction, "user_id": booking["user_id"], "type": "ride_payment", "direction": "debit"})
         db.transactions.insert_one({**base_transaction, "type": "ride_earning", "direction": "credit"})
+        await emit_booking_status({**booking, "status": "completed", "updated_at": completed_at})
         return {"message": "Ride completed", "booking_id": str(booking["_id"]), "status": "completed", "fare_amount": fare}
     except HTTPException:
         raise

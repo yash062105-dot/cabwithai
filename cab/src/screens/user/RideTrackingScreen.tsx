@@ -7,11 +7,14 @@ import {
   ScrollView,
   StatusBar,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 
 import {colors, fonts, spacing} from '../../theme';
 import {useRide} from '../../context/RideContext';
 import LiveMap from '../../components/LiveMap';
+import {connectBookingSocket} from '../../services/bookingSocket';
+import type {Socket} from 'socket.io-client';
 
 interface RideTrackingScreenProps {
   navigation: any;
@@ -24,9 +27,40 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
 
   useEffect(() => {
     if (!bookingId) return;
-    refreshBooking(bookingId).catch(() => undefined);
-    const timer = setInterval(() => refreshBooking(bookingId).catch(() => undefined), 5000);
-    return () => clearInterval(timer);
+    let active = true;
+    let socket: Socket | null = null;
+    const refresh = () => {
+      refreshBooking(bookingId).catch((error: Error) =>
+        console.warn('Could not refresh ride status:', error),
+      );
+    };
+    refresh();
+    const timer = setInterval(refresh, 15_000);
+    connectBookingSocket(
+      bookingId,
+      refresh,
+      message => {
+        if (active) console.warn('Ride update socket:', message);
+      },
+    )
+      .then(connection => {
+        if (active) socket = connection;
+        else connection.disconnect();
+      })
+      .catch(error => {
+        if (active) {
+          Alert.alert(
+            'Live ride updates unavailable',
+            error instanceof Error ? error.message : 'Ride updates will refresh periodically.',
+          );
+        }
+      });
+    return () => {
+      active = false;
+      clearInterval(timer);
+      socket?.emit('unwatch_booking', {booking_id: bookingId});
+      socket?.disconnect();
+    };
   }, [bookingId, refreshBooking]);
 
   if (!currentRide) {

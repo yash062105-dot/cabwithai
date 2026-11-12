@@ -6,7 +6,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo.errors import DuplicateKeyError
 
-from .dependencies import get_current_user
+from .dependencies import get_authenticated_account
 from .mongodb import DatabaseNotConfigured, get_database
 from .schemas import AdminLoginRequest, DriverSignupRequest, ForgotPasswordRequest, LoginRequest, MessageResponse, PhoneOtpRequest, SignupRequest, TokenResponse, VerifyOtpRequest
 from .security import create_driver_token, create_otp, create_token, hash_password, otp_expiry, verify_password
@@ -26,7 +26,7 @@ def normalize_phone(phone: str) -> str:
 
 
 def public_user(user: dict) -> dict:
-    result = {"id": str(user["_id"]), "name": user.get("name", ""), "phone": user.get("phone"), "role": user.get("role", "user")}
+    result = {"id": str(user["_id"]), "name": user.get("name", ""), "phone": user.get("phone"), "role": user.get("role", "user"), "status": user.get("status", "active")}
     if user.get("email"):
         result["email"] = user["email"]
     return result
@@ -119,7 +119,7 @@ def driver_signup(request: DriverSignupRequest) -> TokenResponse:
             "name": request.name.strip(),
             "phone": phone,
             "role": "driver",
-            "status": "active",
+            "status": "inactive",
             "latitude": request.latitude,
             "longitude": request.longitude,
             "available": False,
@@ -143,7 +143,7 @@ def driver_signup(request: DriverSignupRequest) -> TokenResponse:
     return TokenResponse(
         access_token=token,
         driver_access_token=token,
-        user={"id": driver["driver_id"], "name": driver["name"], "phone": phone, "role": "driver"},
+        user={"id": driver["driver_id"], "name": driver["name"], "phone": phone, "role": "driver", "status": driver["status"]},
     )
 
 
@@ -160,7 +160,7 @@ def login(request: LoginRequest) -> TokenResponse:
                     token = create_driver_token(driver["driver_id"], driver["name"])
                     return TokenResponse(
                         access_token=token,
-                        user={"id": driver["driver_id"], "name": driver["name"], "phone": phone, "role": "driver"},
+                        user={"id": driver["driver_id"], "name": driver["name"], "phone": phone, "role": "driver", "status": driver.get("status", "active")},
                         driver_access_token=token,
                     )
             if not user:
@@ -179,8 +179,6 @@ def login(request: LoginRequest) -> TokenResponse:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
     except Exception as exc:
         raise service_error(exc) from exc
-    if user.get("status", "active") != "active":
-        raise HTTPException(status_code=403, detail="This account is inactive")
     return issue_user_token(user)
 
 
@@ -197,8 +195,6 @@ def admin_login(request: AdminLoginRequest) -> TokenResponse:
         raise service_error(exc) from exc
     if not valid or not user:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
-    if user.get("status", "active") != "active":
-        raise HTTPException(status_code=403, detail="This admin account is inactive")
     return issue_user_token(user)
 
 
@@ -214,5 +210,15 @@ def verify_otp(request: VerifyOtpRequest) -> MessageResponse:
 
 
 @router.get("/me")
-def current_user(user: dict = Depends(get_current_user)) -> dict:
-    return public_user(user)
+def current_user(
+    account: dict = Depends(get_authenticated_account),
+) -> dict:
+    if account.get("role") == "driver":
+        return {
+            "id": account["driver_id"],
+            "name": account.get("name", ""),
+            "phone": account.get("phone"),
+            "role": "driver",
+            "status": account.get("status", "active"),
+        }
+    return public_user(account)

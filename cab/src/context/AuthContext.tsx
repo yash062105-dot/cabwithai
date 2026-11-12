@@ -1,6 +1,9 @@
 import React, {createContext, useCallback, useContext, useEffect, useState, ReactNode} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole } from '../types/navigation';
+import Api from '../config/Api';
+
+export type AccountStatus = 'active' | 'inactive' | 'blocked';
 
 export interface UserProfileData {
   name: string;
@@ -22,6 +25,7 @@ interface AuthContextType {
   isLoggedIn: boolean;
   isReady: boolean;
   role: UserRole;
+  accountStatus: AccountStatus;
   user: UserProfileData;
   driver: DriverProfileData;
   signIn: (token: string, profile: Record<string, unknown>) => Promise<void>;
@@ -56,6 +60,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
   const [isReady, setIsReady] = useState(false);
   const [role, setRoleState] = useState<UserRole>('user');
+  const [accountStatus, setAccountStatus] = useState<AccountStatus>('active');
   const [user, setUser] = useState<UserProfileData>(defaultUser);
   const [driver, setDriver] = useState<DriverProfileData>(defaultDriver);
 
@@ -65,12 +70,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const saved = await AsyncStorage.getMany(['accessToken', 'user']);
         if (saved.accessToken && saved.user) {
           const profile = JSON.parse(saved.user);
-          const savedRole = profile.role === 'driver' ? 'driver' : 'user';
-          setRoleState(savedRole);
-          if (savedRole === 'driver') {
-            setDriver(previous => ({...previous, name: profile.name || previous.name, phone: profile.phone || previous.phone}));
+          let currentProfile = profile;
+          try {
+            const response = await Api.get('/auth/me');
+            currentProfile = response.data;
+          } catch (error: any) {
+            if (error.response?.status === 401) {
+              await AsyncStorage.removeMany(['accessToken', 'user']);
+              return;
+            }
+            console.warn('Could not refresh account status:', error);
+          }
+          const currentRole = currentProfile.role === 'driver' ? 'driver' : 'user';
+          setAccountStatus(
+            currentProfile.status === 'blocked' || currentProfile.status === 'inactive'
+              ? currentProfile.status
+              : 'active',
+          );
+          setRoleState(currentRole);
+          if (currentRole === 'driver') {
+            setDriver(previous => ({...previous, name: currentProfile.name || previous.name, phone: currentProfile.phone || previous.phone}));
           } else {
-            setUser(previous => ({...previous, name: profile.name || previous.name, phone: profile.phone || previous.phone, email: profile.email || ''}));
+            setUser(previous => ({...previous, name: currentProfile.name || previous.name, phone: currentProfile.phone || previous.phone, email: currentProfile.email || ''}));
           }
           setIsLoggedIn(true);
         }
@@ -85,12 +106,47 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     restoreSession();
   }, []);
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const refreshStatus = async () => {
+      try {
+        const response = await Api.get('/auth/me');
+        const profile = response.data;
+        setAccountStatus(
+          profile.status === 'blocked' || profile.status === 'inactive'
+            ? profile.status
+            : 'active',
+        );
+        if (profile.role === 'driver') {
+          setDriver(previous => ({...previous, name: profile.name || previous.name, phone: profile.phone || previous.phone}));
+        } else {
+          setUser(previous => ({...previous, name: profile.name || previous.name, phone: profile.phone || previous.phone, email: profile.email || ''}));
+        }
+      } catch (error: any) {
+        if (error.response?.status === 401) {
+          await AsyncStorage.removeMany(['accessToken', 'user']);
+          setIsLoggedIn(false);
+          setAccountStatus('active');
+          return;
+        }
+        console.warn('Could not refresh account status:', error);
+      }
+    };
+    const timer = setInterval(refreshStatus, 10_000);
+    return () => clearInterval(timer);
+  }, [isLoggedIn]);
+
   const signIn = useCallback(async (token: string, profile: Record<string, unknown>) => {
     const loginRole: UserRole = profile.role === 'driver' ? 'driver' : 'user';
     await AsyncStorage.setMany({
       accessToken: token,
       user: JSON.stringify(profile),
     });
+    setAccountStatus(
+      profile.status === 'blocked' || profile.status === 'inactive'
+        ? profile.status
+        : 'active',
+    );
     setRoleState(loginRole);
     if (loginRole === 'driver') {
       setDriver(previous => ({...previous, name: String(profile.name || ''), phone: String(profile.phone || '')}));
@@ -103,6 +159,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const logout = useCallback(async () => {
     await AsyncStorage.removeMany(['accessToken', 'user']);
     setIsLoggedIn(false);
+    setAccountStatus('active');
   }, []);
 
   const setDriverOnline = useCallback((online: boolean) => {
@@ -123,6 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         isLoggedIn,
         isReady,
         role,
+        accountStatus,
         user,
         driver,
         signIn,
