@@ -37,6 +37,7 @@ const LoginScreen = ({ navigation }: LoginScreenProps) => {
       navigation.navigate('OTP', {phone: normalizedPhone, flow: 'login', role, devOtp: response.data.dev_otp});
     } catch (error: any) {
       Alert.alert('Could not send OTP', error.response?.data?.detail || 'Check that the backend is running and try again.');
+      console.error('Error sending OTP:', error.response?.data || error.message);
     } finally {
       setLoading(false);
     }

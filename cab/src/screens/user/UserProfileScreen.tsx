@@ -44,22 +44,6 @@ const UserProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
-        {/* Driver access */}
-        <TouchableOpacity
-          style={styles.driverBanner}
-          activeOpacity={0.85}
-          onPress={logout}>
-          <View style={styles.driverBannerIcon}>
-            <Text style={styles.driverEmoji}>🚗</Text>
-          </View>
-          <View style={styles.driverBannerText}>
-            <Text style={styles.driverBannerTitle}>Sign out to change account</Text>
-            <Text style={styles.driverBannerSubtitle}>
-              Driver accounts are provisioned by the local admin
-            </Text>
-          </View>
-          <Text style={styles.bannerChevron}>›</Text>
-        </TouchableOpacity>
 
         {/* Settings & Support */}
         <Text style={styles.sectionTitle}>Settings & Preferences</Text>
@@ -179,45 +163,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 12,
     fontFamily: fonts.bold,
-  },
-  driverBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 18,
-  },
-  driverBannerIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 12,
-    backgroundColor: colors.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  driverEmoji: {
-    fontSize: 22,
-  },
-  driverBannerText: {
-    flex: 1,
-  },
-  driverBannerTitle: {
-    color: colors.white,
-    fontSize: 14,
-    fontFamily: fonts.bold,
-  },
-  driverBannerSubtitle: {
-    color: '#94A3B8',
-    fontSize: 11,
-    fontFamily: fonts.regular,
-    marginTop: 2,
-  },
-  bannerChevron: {
-    color: colors.secondary,
-    fontSize: 24,
-    marginLeft: 8,
   },
   sectionTitle: {
     color: colors.text,
