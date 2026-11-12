@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "api/index.py": {
+      "excludeFiles": "{data/**,tests/**,notes/**,private_documents/**,ml/acquire.py,ml/eda.py,ml/train.py,ml/inspect_dataset.py}"
+    }
+  }
+}

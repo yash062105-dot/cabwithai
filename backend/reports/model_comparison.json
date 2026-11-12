@@ -1,0 +1,67 @@
+{
+  "selected_model": "hist_gradient_boosting",
+  "models": {
+    "linear_regression": {
+      "validation": {
+        "mae_seconds": 352.62076134770575,
+        "rmse_seconds": 532.3816035862037,
+        "r2": 0.5865753298332679
+      },
+      "test": {
+        "mae_seconds": 351.0053554711785,
+        "rmse_seconds": 530.7266063500872,
+        "r2": 0.5834401916141574
+      }
+    },
+    "random_forest": {
+      "validation": {
+        "mae_seconds": 291.53184296268944,
+        "rmse_seconds": 458.05426458324854,
+        "r2": 0.6939557881124592
+      },
+      "test": {
+        "mae_seconds": 295.5156243180297,
+        "rmse_seconds": 460.2154678617707,
+        "r2": 0.6867738106495136
+      }
+    },
+    "hist_gradient_boosting": {
+      "validation": {
+        "mae_seconds": 285.67743917654826,
+        "rmse_seconds": 449.0136447142419,
+        "r2": 0.7059173617959141
+      },
+      "test": {
+        "mae_seconds": 289.93636901705804,
+        "rmse_seconds": 453.26328817670435,
+        "r2": 0.6961657457873585
+      }
+    }
+  },
+  "rows": {
+    "train": 47919,
+    "validation": 47751,
+    "test": 47672
+  },
+  "features": [
+    "origin_lat",
+    "origin_lon",
+    "destination_lat",
+    "destination_lon",
+    "delta_lat",
+    "delta_lon",
+    "straight_line_distance_miles",
+    "pickup_hour_sin",
+    "pickup_hour_cos",
+    "pickup_dow_sin",
+    "pickup_dow_cos",
+    "pickup_month_sin",
+    "pickup_month_cos",
+    "is_weekend",
+    "shared_request",
+    "wav_request",
+    "access_a_ride"
+  ],
+  "target": "dropoff_datetime - pickup_datetime seconds",
+  "source": "NYC TLC 2025 HVFHV public trip records"
+}

@@ -1,0 +1,36 @@
+{
+  "model_name": "hist_gradient_boosting",
+  "target": "dropoff_datetime - pickup_datetime seconds",
+  "feature_columns": [
+    "origin_lat",
+    "origin_lon",
+    "destination_lat",
+    "destination_lon",
+    "delta_lat",
+    "delta_lon",
+    "straight_line_distance_miles",
+    "pickup_hour_sin",
+    "pickup_hour_cos",
+    "pickup_dow_sin",
+    "pickup_dow_cos",
+    "pickup_month_sin",
+    "pickup_month_cos",
+    "is_weekend",
+    "shared_request",
+    "wav_request",
+    "access_a_ride"
+  ],
+  "source": "NYC TLC 2025 HVFHV public trip records",
+  "months": [
+    1,
+    10,
+    12
+  ],
+  "sample_per_file": 50000,
+  "rows": {
+    "train": 47919,
+    "validation": 47751,
+    "test": 47672
+  },
+  "public_data_boundary": "Does not represent this cab company's drivers"
+}

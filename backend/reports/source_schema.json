@@ -1,0 +1,221 @@
+{
+  "data_dir": "data\\raw",
+  "files": [
+    {
+      "path": "data\\raw\\fhvhv_tripdata_2025-01.parquet",
+      "bytes": 491076642,
+      "columns": [
+        "request_datetime",
+        "pickup_datetime",
+        "dropoff_datetime",
+        "PULocationID",
+        "DOLocationID",
+        "trip_time",
+        "shared_request_flag",
+        "wav_request_flag",
+        "access_a_ride_flag"
+      ],
+      "sample": [
+        {
+          "request_datetime": "2025-01-01 00:28:07",
+          "pickup_datetime": "2025-01-01 00:33:25",
+          "dropoff_datetime": "2025-01-01 00:54:24",
+          "PULocationID": "148",
+          "DOLocationID": "211",
+          "trip_time": "1259",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-01-01 00:18:33",
+          "pickup_datetime": "2025-01-01 00:29:49",
+          "dropoff_datetime": "2025-01-01 00:41:52",
+          "PULocationID": "127",
+          "DOLocationID": "244",
+          "trip_time": "723",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-01-01 00:28:22",
+          "pickup_datetime": "2025-01-01 00:32:39",
+          "dropoff_datetime": "2025-01-01 01:20:33",
+          "PULocationID": "132",
+          "DOLocationID": "181",
+          "trip_time": "2874",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-01-01 00:27:13",
+          "pickup_datetime": "2025-01-01 00:34:55",
+          "dropoff_datetime": "2025-01-01 00:39:19",
+          "PULocationID": "76",
+          "DOLocationID": "76",
+          "trip_time": "264",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-01-01 00:33:29",
+          "pickup_datetime": "2025-01-01 00:46:19",
+          "dropoff_datetime": "2025-01-01 00:53:56",
+          "PULocationID": "76",
+          "DOLocationID": "76",
+          "trip_time": "457",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        }
+      ]
+    },
+    {
+      "path": "data\\raw\\fhvhv_tripdata_2025-10.parquet",
+      "bytes": 518486063,
+      "columns": [
+        "request_datetime",
+        "pickup_datetime",
+        "dropoff_datetime",
+        "PULocationID",
+        "DOLocationID",
+        "trip_time",
+        "shared_request_flag",
+        "wav_request_flag",
+        "access_a_ride_flag"
+      ],
+      "sample": [
+        {
+          "request_datetime": "2025-09-30 23:58:10",
+          "pickup_datetime": "2025-10-01 00:03:32",
+          "dropoff_datetime": "2025-10-01 00:13:15",
+          "PULocationID": "48",
+          "DOLocationID": "24",
+          "trip_time": "583",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-09-30 23:41:43",
+          "pickup_datetime": "2025-10-01 00:02:58",
+          "dropoff_datetime": "2025-10-01 00:16:03",
+          "PULocationID": "156",
+          "DOLocationID": "156",
+          "trip_time": "785",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-09-30 23:58:24",
+          "pickup_datetime": "2025-10-01 00:10:00",
+          "dropoff_datetime": "2025-10-01 00:27:36",
+          "PULocationID": "116",
+          "DOLocationID": "147",
+          "trip_time": "1056",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-10-01 00:13:17",
+          "pickup_datetime": "2025-10-01 00:17:07",
+          "dropoff_datetime": "2025-10-01 00:59:05",
+          "PULocationID": "68",
+          "DOLocationID": "21",
+          "trip_time": "2518",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-10-01 00:13:54",
+          "pickup_datetime": "2025-10-01 00:16:22",
+          "dropoff_datetime": "2025-10-01 00:22:49",
+          "PULocationID": "7",
+          "DOLocationID": "223",
+          "trip_time": "388",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        }
+      ]
+    },
+    {
+      "path": "data\\raw\\fhvhv_tripdata_2025-12.parquet",
+      "bytes": 535754793,
+      "columns": [
+        "request_datetime",
+        "pickup_datetime",
+        "dropoff_datetime",
+        "PULocationID",
+        "DOLocationID",
+        "trip_time",
+        "shared_request_flag",
+        "wav_request_flag",
+        "access_a_ride_flag"
+      ],
+      "sample": [
+        {
+          "request_datetime": "2025-12-01 00:31:21",
+          "pickup_datetime": "2025-12-01 00:36:59",
+          "dropoff_datetime": "2025-12-01 01:06:32",
+          "PULocationID": "225",
+          "DOLocationID": "223",
+          "trip_time": "1772",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-12-01 00:23:20",
+          "pickup_datetime": "2025-12-01 00:28:55",
+          "dropoff_datetime": "2025-12-01 00:39:49",
+          "PULocationID": "98",
+          "DOLocationID": "19",
+          "trip_time": "654",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-12-01 00:41:10",
+          "pickup_datetime": "2025-12-01 00:44:46",
+          "dropoff_datetime": "2025-12-01 01:13:31",
+          "PULocationID": "36",
+          "DOLocationID": "42",
+          "trip_time": "1725",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-11-30 23:57:06",
+          "pickup_datetime": "2025-12-01 00:04:50",
+          "dropoff_datetime": "2025-12-01 00:38:03",
+          "PULocationID": "186",
+          "DOLocationID": "37",
+          "trip_time": "1993",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        },
+        {
+          "request_datetime": "2025-12-01 00:14:19",
+          "pickup_datetime": "2025-12-01 00:19:07",
+          "dropoff_datetime": "2025-12-01 00:30:51",
+          "PULocationID": "163",
+          "DOLocationID": "107",
+          "trip_time": "704",
+          "shared_request_flag": "N",
+          "wav_request_flag": "N",
+          "access_a_ride_flag": "N"
+        }
+      ]
+    }
+  ]
+}
