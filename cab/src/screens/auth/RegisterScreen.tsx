@@ -12,8 +12,9 @@ import {
   StatusBar,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import Api from '../../config/Api';
+import {Button, ScreenHeader} from '../../components';
 
 type UserRole = 'user' | 'driver';
 
@@ -23,79 +24,64 @@ interface RegisterScreenProps {
 
 const RegisterScreen = ({navigation}: RegisterScreenProps) => {
   const [role, setRole] = useState<UserRole>('user');
-
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
-  if (name.trim().length < 2 || phone.replace(/\D/g, '').length !== 10) {
-    Alert.alert('Check your details', 'Enter your name and a valid 10-digit mobile number.');
-    return;
-  }
-  try {
-    const normalizedPhone = `+91${phone.replace(/\D/g, '')}`;
-    const response = await Api.post('/auth/request-otp', {phone: normalizedPhone, purpose: 'signup'});
-    navigation.navigate('OTP', {
-      phone: normalizedPhone,
-      name: name.trim(),
-      flow: 'register',
-      role,
-      devOtp: response.data.dev_otp,
-      ...(role === 'driver' ? {registrationStep: 'driver-details'} : {}),
-    });
-  } catch (error: any) {
-    Alert.alert('Could not start registration', error.response?.data?.detail || 'Check that the backend is running and try again.');
-  }
-};
+    const rawDigits = phone.replace(/\D/g, '');
+    if (name.trim().length < 2 || rawDigits.length !== 10) {
+      Alert.alert('Check your details', 'Enter your full name and a valid 10-digit mobile number.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const normalizedPhone = `+91${rawDigits}`;
+      const response = await Api.post('/auth/request-otp', {phone: normalizedPhone, purpose: 'signup'});
+      navigation.navigate('OTP', {
+        phone: normalizedPhone,
+        name: name.trim(),
+        flow: 'register',
+        role,
+        devOtp: response.data.dev_otp,
+        ...(role === 'driver' ? {registrationStep: 'driver-details'} : {}),
+      });
+    } catch (error: any) {
+      Alert.alert('Could not start registration', error.response?.data?.detail || 'Check that the backend is running and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={
-        Platform.OS === 'ios' ? 'padding' : undefined
-      }>
-      
-      <StatusBar
-        barStyle="dark-content"
-        // backgroundColor={colors.background}
-      />
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar barStyle="dark-content" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}>
+        
+        {/* Navigation & Header */}
+        <ScreenHeader
+          onBack={() => navigation.goBack()}
+          style={styles.header}
+        />
 
-        {/* Header */}
-
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}>
-            <Text style={styles.backArrow}>‹</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.logo}>CAB</Text>
-
-          <Text style={styles.title}>
-            Create Account
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Join CAB and start your journey
-          </Text>
+        <View style={styles.introContainer}>
+          <View style={styles.logoBadge}>
+            <Text style={styles.logo}>CAB</Text>
+          </View>
+          <Text style={styles.title}>Create Account</Text>
+          <Text style={styles.subtitle}>Join CAB and experience seamless cab rides</Text>
         </View>
 
         {/* Role Selection */}
-
-        <Text style={styles.sectionTitle}>
-          I want to
-        </Text>
-
+        <Text style={styles.sectionTitle}>I want to</Text>
         <View style={styles.roleContainer}>
-
-          {/* User */}
-
+          {/* User Option */}
           <TouchableOpacity
             style={[
               styles.roleCard,
@@ -103,25 +89,17 @@ const RegisterScreen = ({navigation}: RegisterScreenProps) => {
             ]}
             onPress={() => setRole('user')}
             activeOpacity={0.8}>
-
             <View
               style={[
                 styles.roleIcon,
                 role === 'user' && styles.selectedRoleIcon,
               ]}>
-              <Text style={styles.roleEmoji}>
-                👤
-              </Text>
+              <Text style={styles.roleEmoji}>👤</Text>
             </View>
 
             <View style={styles.roleContent}>
-              <Text style={styles.roleTitle}>
-                Book a Cab
-              </Text>
-
-              <Text style={styles.roleDescription}>
-                I want to travel
-              </Text>
+              <Text style={styles.roleTitle}>Book a Cab</Text>
+              <Text style={styles.roleDescription}>I want to travel with comfort</Text>
             </View>
 
             <View
@@ -129,14 +107,11 @@ const RegisterScreen = ({navigation}: RegisterScreenProps) => {
                 styles.radio,
                 role === 'user' && styles.radioSelected,
               ]}>
-              {role === 'user' && (
-                <View style={styles.radioInner} />
-              )}
+              {role === 'user' && <View style={styles.radioInner} />}
             </View>
           </TouchableOpacity>
 
-          {/* Driver */}
-
+          {/* Driver Option */}
           <TouchableOpacity
             style={[
               styles.roleCard,
@@ -144,25 +119,17 @@ const RegisterScreen = ({navigation}: RegisterScreenProps) => {
             ]}
             onPress={() => setRole('driver')}
             activeOpacity={0.8}>
-
             <View
               style={[
                 styles.roleIcon,
                 role === 'driver' && styles.selectedRoleIcon,
               ]}>
-              <Text style={styles.roleEmoji}>
-                🚗
-              </Text>
+              <Text style={styles.roleEmoji}>🚗</Text>
             </View>
 
             <View style={styles.roleContent}>
-              <Text style={styles.roleTitle}>
-                Drive with CAB
-              </Text>
-
-              <Text style={styles.roleDescription}>
-                I want to earn
-              </Text>
+              <Text style={styles.roleTitle}>Drive with CAB</Text>
+              <Text style={styles.roleDescription}>I want to earn flexible income</Text>
             </View>
 
             <View
@@ -170,52 +137,38 @@ const RegisterScreen = ({navigation}: RegisterScreenProps) => {
                 styles.radio,
                 role === 'driver' && styles.radioSelected,
               ]}>
-              {role === 'driver' && (
-                <View style={styles.radioInner} />
-              )}
+              {role === 'driver' && <View style={styles.radioInner} />}
             </View>
           </TouchableOpacity>
-
         </View>
 
         {/* Form */}
-
-        <View style={styles.form}>
-
-          {/* Full Name */}
-
+        <View style={styles.formCard}>
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Full Name
-            </Text>
-
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your full name"
-              placeholderTextColor={colors.textSecondary}
-              value={name}
-              onChangeText={setName}
-            />
+            <Text style={styles.label}>Full Name</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your name"
+                placeholderTextColor={colors.textMuted}
+                value={name}
+                onChangeText={setName}
+              />
+            </View>
           </View>
 
-          {/* Mobile */}
-
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>
-              Mobile Number
-            </Text>
-
-            <View style={styles.phoneContainer}>
-              <Text style={styles.countryCode}>
-                +91
-              </Text>
-
+            <Text style={styles.label}>Mobile Number</Text>
+            <View style={styles.inputContainer}>
+              <View style={styles.countryCodeContainer}>
+                <Text style={styles.flag}>🇮🇳</Text>
+                <Text style={styles.countryCode}>+91</Text>
+              </View>
               <View style={styles.verticalLine} />
-
               <TextInput
-                style={styles.phoneInput}
-                placeholder="Enter mobile number"
-                placeholderTextColor={colors.textSecondary}
+                style={styles.input}
+                placeholder="Enter 10-digit number"
+                placeholderTextColor={colors.textMuted}
                 keyboardType="phone-pad"
                 maxLength={10}
                 value={phone}
@@ -224,51 +177,24 @@ const RegisterScreen = ({navigation}: RegisterScreenProps) => {
             </View>
           </View>
 
-          {/* Register */}
+          <Button
+            title={loading ? 'Creating...' : role === 'driver' ? 'Continue with Vehicle Details' : 'Continue with OTP'}
+            icon="→"
+            size="lg"
+            loading={loading}
+            onPress={handleRegister}
+            style={styles.actionBtn}
+          />
+        </View>
 
+        {/* Footer Link */}
+        <View style={styles.loginContainer}>
+          <Text style={styles.loginText}>Already have an account?</Text>
           <TouchableOpacity
-            style={styles.registerButton}
-            activeOpacity={0.8}
-            onPress={() => {
-              if (role === 'driver') {
-                if (name.trim().length < 2 || phone.replace(/\D/g, '').length !== 10) {
-                  Alert.alert('Check your details', 'Enter your name and a valid 10-digit mobile number.');
-                  return;
-                }
-                navigation.navigate('DriverDetails', {
-                  name: name.trim(),
-                  phone: `+91${phone.replace(/\D/g, '')}`,
-                });
-                return;
-              }
-              handleRegister();
-            }}>
-
-            <Text style={styles.registerButtonText}>
-              Create Account
-            </Text>
-
-            <Text style={styles.arrow}>
-              →
-            </Text>
+            onPress={() => navigation.navigate('Login')}
+            activeOpacity={0.7}>
+            <Text style={styles.loginLink}> Log In</Text>
           </TouchableOpacity>
-
-          {/* Login */}
-
-          <View style={styles.loginContainer}>
-            <Text style={styles.loginText}>
-              Already have an account?
-            </Text>
-
-            <TouchableOpacity
-              onPress={() => navigation.navigate('Login')}
-              activeOpacity={0.7}>
-              <Text style={styles.loginLink}>
-                {' '}Login
-              </Text>
-            </TouchableOpacity>
-          </View>
-
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -284,110 +210,104 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: 25,
     paddingBottom: 35,
   },
 
   header: {
-    marginBottom: 25,
+    paddingHorizontal: 0,
+    paddingTop: 12,
   },
 
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 22,
+  introContainer: {
+    marginTop: 10,
+    marginBottom: 24,
   },
 
-  backArrow: {
-    color: colors.text,
-    fontSize: 30,
-    lineHeight: 30,
-    marginTop: -4,
+  logoBadge: {
+    backgroundColor: colors.primary,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
+    marginBottom: 16,
   },
 
   logo: {
     color: colors.secondary,
-    backgroundColor: colors.primary,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9,
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: '800',
     letterSpacing: 2,
-    marginBottom: 22,
   },
 
   title: {
     color: colors.text,
     fontSize: 28,
     fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginBottom: 7,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
 
   subtitle: {
     color: colors.textSecondary,
     fontSize: 14,
     fontFamily: fonts.regular,
+    lineHeight: 20,
   },
 
   sectionTitle: {
     color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.medium,
-    fontWeight: '600',
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 10,
   },
 
   roleContainer: {
-    marginBottom: 25,
+    gap: 10,
+    marginBottom: 20,
   },
 
   roleCard: {
-    minHeight: 78,
+    minHeight: 74,
     backgroundColor: colors.white,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 15,
+    borderRadius: radii.lg,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 14,
-    marginBottom: 10,
+    paddingHorizontal: 16,
+    ...shadows.sm,
   },
 
   selectedRoleCard: {
-    borderColor: colors.secondary,
-    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.white,
   },
 
   roleIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: colors.background,
+    width: 44,
+    height: 44,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   selectedRoleIcon: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: colors.secondaryLight,
   },
 
   roleEmoji: {
-    fontSize: 23,
+    fontSize: 22,
   },
 
   roleContent: {
     flex: 1,
-    marginLeft: 12,
+    marginLeft: 14,
   },
 
   roleTitle: {
@@ -395,7 +315,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: fonts.bold,
     fontWeight: '700',
-    marginBottom: 3,
+    marginBottom: 2,
   },
 
   roleDescription: {
@@ -419,127 +339,85 @@ const styles = StyleSheet.create({
   },
 
   radioInner: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: colors.primary,
   },
 
-  form: {
-    width: '100%',
+  formCard: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
   },
 
   inputGroup: {
-    marginBottom: 17,
+    marginBottom: 16,
   },
 
   label: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: fonts.medium,
     fontWeight: '600',
     marginBottom: 8,
   },
 
-  input: {
-    height: 56,
-    backgroundColor: colors.white,
-    borderWidth: 1,
+  inputContainer: {
+    height: 52,
+    backgroundColor: colors.surfaceSubtle,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 15,
-    color: colors.text,
-    fontSize: 15,
-    fontFamily: fonts.regular,
-  },
-
-  phoneContainer: {
-    height: 56,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
+    borderRadius: radii.md,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: 14,
+  },
+
+  countryCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  flag: {
+    fontSize: 16,
+    marginRight: 6,
   },
 
   countryCode: {
     color: colors.text,
     fontSize: 15,
     fontFamily: fonts.medium,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   verticalLine: {
     width: 1,
-    height: 22,
+    height: 20,
     backgroundColor: colors.border,
     marginHorizontal: 12,
   },
 
-  phoneInput: {
+  input: {
     flex: 1,
     color: colors.text,
     fontSize: 15,
-    fontFamily: fonts.regular,
-    paddingVertical: 0,
-  },
-
-  passwordContainer: {
-    height: 56,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-  },
-
-  passwordInput: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 15,
-    fontFamily: fonts.regular,
-    paddingVertical: 0,
-  },
-
-  showPassword: {
-    color: colors.primary,
-    fontSize: 13,
     fontFamily: fonts.medium,
-    fontWeight: '600',
+    paddingVertical: 0,
   },
 
-  registerButton: {
-    height: 56,
-    backgroundColor: colors.primary,
-    borderRadius: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+  actionBtn: {
     marginTop: 8,
-  },
-
-  registerButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
-    marginTop: -2,
   },
 
   loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 25,
+    alignItems: 'center',
+    marginTop: 24,
   },
 
   loginText: {

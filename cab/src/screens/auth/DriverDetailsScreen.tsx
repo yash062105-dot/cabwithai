@@ -10,7 +10,8 @@ import {
   StatusBar,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
+import {Button, ScreenHeader} from '../../components';
 
 type VehicleType = 'Mini' | 'Sedan' | 'SUV' | 'Auto';
 
@@ -23,9 +24,7 @@ const DriverDetailsScreen = ({
   navigation,
   route,
 }: DriverDetailsScreenProps) => {
-  const [vehicleType, setVehicleType] =
-    useState<VehicleType>('Mini');
-
+  const [vehicleType, setVehicleType] = useState<VehicleType>('Mini');
   const [vehicleModel, setVehicleModel] = useState('');
   const [vehicleNumber, setVehicleNumber] = useState('');
   const [licenseNumber, setLicenseNumber] = useState('');
@@ -48,63 +47,39 @@ const DriverDetailsScreen = ({
     });
   };
 
-  const vehicleTypes: VehicleType[] = [
-    'Mini',
-    'Sedan',
-    'SUV',
-    'Auto',
+  const vehicleTypes: {type: VehicleType; icon: string; desc: string}[] = [
+    {type: 'Mini', icon: '🚗', desc: 'Compact'},
+    {type: 'Sedan', icon: '🚙', desc: 'Comfort'},
+    {type: 'SUV', icon: '🚐', desc: 'Spacious'},
+    {type: 'Auto', icon: '🛺', desc: 'Quick 3-wheeler'},
   ];
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        // backgroundColor={colors.background}
-      />
+      <StatusBar barStyle="dark-content" />
+
+      <ScreenHeader onBack={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}>
-
-        {/* Header */}
-
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.7}>
-            <Text style={styles.backArrow}>‹</Text>
-          </TouchableOpacity>
-
-          <View style={styles.progressContainer}>
-            <View style={styles.progressActive} />
-            <View style={styles.progressActive} />
-            <View style={styles.progressInactive} />
-          </View>
-
-          <Text style={styles.stepText}>
-            Step 2 of 3
-          </Text>
-
-          <Text style={styles.title}>
-            Vehicle Details
-          </Text>
-
-          <Text style={styles.subtitle}>
-            Tell us about the vehicle you'll use with CAB.
-          </Text>
+        
+        {/* Progress Tracker */}
+        <View style={styles.progressContainer}>
+          <View style={[styles.progressBar, styles.progressActive]} />
+          <View style={[styles.progressBar, styles.progressActive]} />
+          <View style={[styles.progressBar, styles.progressInactive]} />
         </View>
 
-        {/* Vehicle Type */}
+        <Text style={styles.stepBadge}>STEP 2 OF 3</Text>
+        <Text style={styles.title}>Vehicle Details</Text>
+        <Text style={styles.subtitle}>Tell us about the vehicle you'll drive with CAB</Text>
 
-        <Text style={styles.sectionTitle}>
-          Vehicle Type
-        </Text>
-
+        {/* Vehicle Selection */}
+        <Text style={styles.sectionTitle}>Select Vehicle Category</Text>
         <View style={styles.vehicleGrid}>
-          {vehicleTypes.map(type => {
+          {vehicleTypes.map(({type, icon, desc}) => {
             const selected = vehicleType === type;
-
             return (
               <TouchableOpacity
                 key={type}
@@ -114,28 +89,18 @@ const DriverDetailsScreen = ({
                 ]}
                 onPress={() => setVehicleType(type)}
                 activeOpacity={0.8}>
+                <View style={[styles.vehicleIconCircle, selected && styles.selectedVehicleIcon]}>
+                  <Text style={styles.vehicleIcon}>{icon}</Text>
+                </View>
 
-                <Text style={styles.vehicleIcon}>
-                  {type === 'Auto'
-                    ? '🛺'
-                    : type === 'SUV'
-                    ? '🚙'
-                    : '🚗'}
-                </Text>
-
-                <Text
-                  style={[
-                    styles.vehicleText,
-                    selected && styles.selectedVehicleText,
-                  ]}>
+                <Text style={[styles.vehicleText, selected && styles.selectedVehicleText]}>
                   {type}
                 </Text>
+                <Text style={styles.vehicleDesc}>{desc}</Text>
 
                 {selected && (
                   <View style={styles.selectedDot}>
-                    <Text style={styles.check}>
-                      ✓
-                    </Text>
+                    <Text style={styles.check}>✓</Text>
                   </View>
                 )}
               </TouchableOpacity>
@@ -143,72 +108,57 @@ const DriverDetailsScreen = ({
           })}
         </View>
 
-        {/* Vehicle Model */}
+        {/* Vehicle Information Fields */}
+        <View style={styles.formCard}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Vehicle Model</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. Maruti Suzuki Dzire / Swift"
+                placeholderTextColor={colors.textMuted}
+                value={vehicleModel}
+                onChangeText={setVehicleModel}
+              />
+            </View>
+          </View>
 
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Vehicle Model
-          </Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Vehicle Registration Number</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. RJ14 AB 1234"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="characters"
+                value={vehicleNumber}
+                onChangeText={setVehicleNumber}
+              />
+            </View>
+          </View>
 
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. Maruti Suzuki Dzire"
-            placeholderTextColor={colors.textSecondary}
-            value={vehicleModel}
-            onChangeText={setVehicleModel}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Driving Licence Number</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. DL-1420110012345"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="characters"
+                value={licenseNumber}
+                onChangeText={setLicenseNumber}
+              />
+            </View>
+          </View>
+
+          <Button
+            title="Continue to Documents"
+            icon="→"
+            size="lg"
+            onPress={handleContinue}
+            style={styles.continueBtn}
           />
         </View>
-
-        {/* Vehicle Number */}
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Vehicle Number
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="e.g. RJ14AB1234"
-            placeholderTextColor={colors.textSecondary}
-            autoCapitalize="characters"
-            value={vehicleNumber}
-            onChangeText={setVehicleNumber}
-          />
-        </View>
-
-        {/* License */}
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Driving License Number
-          </Text>
-
-          <TextInput
-            style={styles.input}
-            placeholder="Enter driving license number"
-            placeholderTextColor={colors.textSecondary}
-            autoCapitalize="characters"
-            value={licenseNumber}
-            onChangeText={setLicenseNumber}
-          />
-        </View>
-
-        {/* Continue */}
-
-        <TouchableOpacity
-          style={styles.button}
-          activeOpacity={0.8}
-          onPress={handleContinue}>
-
-          <Text style={styles.buttonText}>
-            Continue
-          </Text>
-
-          <Text style={styles.arrow}>
-            →
-          </Text>
-        </TouchableOpacity>
-
       </ScrollView>
     </View>
   );
@@ -222,128 +172,128 @@ const styles = StyleSheet.create({
 
   content: {
     paddingHorizontal: spacing.xl,
-    paddingTop: 25,
-    paddingBottom: 35,
-  },
-
-  header: {
-    marginBottom: 28,
-  },
-
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-
-  backArrow: {
-    color: colors.text,
-    fontSize: 30,
-    lineHeight: 30,
-    marginTop: -4,
+    paddingTop: 10,
+    paddingBottom: 40,
   },
 
   progressContainer: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  progressBar: {
+    height: 4,
+    flex: 1,
+    borderRadius: radii.pill,
   },
 
   progressActive: {
-    height: 5,
-    flex: 1,
-    backgroundColor: colors.secondary,
-    borderRadius: 5,
+    backgroundColor: colors.primary,
   },
 
   progressInactive: {
-    height: 5,
-    flex: 1,
     backgroundColor: colors.border,
-    borderRadius: 5,
   },
 
-  stepText: {
+  stepBadge: {
     color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: fonts.medium,
-    marginBottom: 18,
+    fontSize: 11,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 6,
   },
 
   title: {
     color: colors.text,
     fontSize: 28,
     fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
 
   subtitle: {
     color: colors.textSecondary,
     fontSize: 14,
     fontFamily: fonts.regular,
-    lineHeight: 21,
+    marginBottom: 24,
   },
 
   sectionTitle: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: fonts.bold,
     fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
     marginBottom: 12,
   },
 
   vehicleGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    marginBottom: 25,
+    gap: 10,
+    marginBottom: 20,
   },
 
   vehicleCard: {
     width: '48%',
-    height: 100,
     backgroundColor: colors.white,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
+    borderRadius: radii.lg,
+    padding: 14,
     position: 'relative',
+    ...shadows.sm,
   },
 
   selectedVehicleCard: {
-    borderColor: colors.secondary,
-    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: '#FAFBFD',
+  },
+
+  vehicleIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+
+  selectedVehicleIcon: {
+    backgroundColor: colors.secondaryLight,
   },
 
   vehicleIcon: {
-    fontSize: 30,
-    marginBottom: 6,
+    fontSize: 22,
   },
 
   vehicleText: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontFamily: fonts.medium,
-    fontWeight: '600',
+    color: colors.text,
+    fontSize: 15,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
   },
 
   selectedVehicleText: {
-    color: colors.text,
+    color: colors.primary,
+  },
+
+  vehicleDesc: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontFamily: fonts.regular,
+    marginTop: 2,
   },
 
   selectedDot: {
     position: 'absolute',
-    top: 8,
-    right: 8,
+    top: 12,
+    right: 12,
     width: 20,
     height: 20,
     borderRadius: 10,
@@ -354,55 +304,50 @@ const styles = StyleSheet.create({
 
   check: {
     color: colors.secondary,
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  formCard: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
   },
 
   inputGroup: {
-    marginBottom: 18,
+    marginBottom: 16,
   },
 
   label: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: fonts.medium,
     fontWeight: '600',
     marginBottom: 8,
   },
 
-  input: {
-    height: 56,
-    backgroundColor: colors.white,
-    borderWidth: 1,
+  inputContainer: {
+    height: 52,
+    backgroundColor: colors.surfaceSubtle,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 14,
-    paddingHorizontal: 15,
+    borderRadius: radii.md,
+    paddingHorizontal: 14,
+    justifyContent: 'center',
+  },
+
+  input: {
     color: colors.text,
     fontSize: 15,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
+    paddingVertical: 0,
   },
 
-  button: {
-    height: 56,
-    backgroundColor: colors.primary,
-    borderRadius: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-
-  buttonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
+  continueBtn: {
+    marginTop: 8,
   },
 });
 

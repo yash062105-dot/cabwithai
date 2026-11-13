@@ -1,47 +1,66 @@
-import React, {useEffect} from 'react';
+import React, {useEffect, useRef} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   StatusBar,
+  Animated,
 } from 'react-native';
 
-import {colors, fonts} from '../../theme';
+import {colors, fonts, radii} from '../../theme';
 
 interface SplashScreenProps {
   navigation: any;
 }
 
 const SplashScreen = ({navigation}: SplashScreenProps) => {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+
   useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 8,
+        tension: 40,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
     const timer = setTimeout(() => {
       navigation.replace('Onboarding');
-    }, 2000);
+    }, 2200);
 
     return () => clearTimeout(timer);
-  }, [navigation]);
+  }, [navigation, fadeAnim, scaleAnim]);
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        // backgroundColor={colors.primary}
-        
-      />
+      <StatusBar barStyle="light-content" />
 
-      <View style={styles.logoContainer}>
-        <Text style={styles.logo}>CAB</Text>
+      <Animated.View
+        style={[
+          styles.logoContainer,
+          {
+            opacity: fadeAnim,
+            transform: [{scale: scaleAnim}],
+          },
+        ]}>
+        <View style={styles.badgeContainer}>
+          <Text style={styles.logo}>CAB</Text>
+        </View>
 
         <View style={styles.logoLine} />
 
-        <Text style={styles.tagline}>
-          Your ride, your way.
-        </Text>
-      </View>
+        <Text style={styles.tagline}>Your ride, your way.</Text>
+      </Animated.View>
 
-      <Text style={styles.bottomText}>
-        Safe • Fast • Reliable
-      </Text>
+      <Text style={styles.bottomText}>Safe • Fast • Reliable</Text>
     </View>
   );
 };
@@ -58,35 +77,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  badgeContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: radii.md,
+    borderWidth: 1.5,
+    borderColor: 'rgba(250, 204, 21, 0.3)',
+    backgroundColor: 'rgba(250, 204, 21, 0.08)',
+  },
+
   logo: {
     color: colors.secondary,
-    fontSize: 52,
+    fontSize: 48,
     fontFamily: fonts.bold,
     fontWeight: '800',
-    letterSpacing: 4,
+    letterSpacing: 6,
   },
 
   logoLine: {
-    width: 55,
+    width: 48,
     height: 4,
-    borderRadius: 10,
+    borderRadius: radii.pill,
     backgroundColor: colors.secondary,
-    marginTop: 8,
-    marginBottom: 12,
+    marginTop: 16,
+    marginBottom: 14,
   },
 
   tagline: {
-    color: colors.white,
-    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.85)',
+    fontSize: 16,
     fontFamily: fonts.medium,
+    letterSpacing: 0.3,
   },
 
   bottomText: {
     position: 'absolute',
-    bottom: 35,
-    color: '#94A3B8',
+    bottom: 40,
+    color: colors.textMuted,
     fontSize: 13,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
+    letterSpacing: 1.2,
   },
 });
 

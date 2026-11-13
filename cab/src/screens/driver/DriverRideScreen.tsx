@@ -1,196 +1,121 @@
-import React, { useEffect, useState } from 'react';
+import React, {useState, useEffect} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
+  TextInput,
   ScrollView,
   StatusBar,
-  ActivityIndicator,
   Alert,
 } from 'react-native';
 
-import { colors, fonts, spacing } from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import Api from '../../config/Api';
 import LiveMap from '../../components/LiveMap';
-import { Coordinates, watchLocation } from '../../services/location';
-import {connectDriverSocket} from '../../services/driverSocket';
-import type {Socket} from 'socket.io-client';
+import {Button, ScreenHeader} from '../../components';
 
 interface DriverRideScreenProps {
   navigation: any;
   route: any;
 }
 
-type TripStage = 'navigating_pickup' | 'arrived' | 'in_trip' | 'completed';
-
-const DriverRideScreen = ({ navigation, route }: DriverRideScreenProps) => {
-  const [stage, setStage] = useState<TripStage>('navigating_pickup');
-  const [booking, setBooking] = useState<Record<string, any> | null>(null);
-  const [driverLocation, setDriverLocation] = useState<Coordinates | null>(
-    null,
-  );
+const DriverRideScreen = ({navigation, route}: DriverRideScreenProps) => {
   const bookingId = route?.params?.bookingId;
+  const [booking, setBooking] = useState<Record<string, any> | null>(null);
+  const [enteredOtp, setEnteredOtp] = useState('');
+  const [otpError, setOtpError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const loadBooking = async () => {
-      try {
-        const response = await Api.get('/driver/bookings');
-        const current = response.data.find(
-          (item: Record<string, any>) => item._id === bookingId,
-        );
-        if (current) {
-          setBooking(current);
-          setStage(
-            current.status === 'in_progress'
-              ? 'in_trip'
-              : current.status === 'completed'
-              ? 'completed'
-              : 'navigating_pickup',
-          );
-        }
-      } catch (error: any) {
-        Alert.alert(
-          'Could not load ride',
-          error.response?.data?.detail ||
-            'Check your connection and try again.',
-        );
-      }
-    };
-    loadBooking();
-  }, [bookingId]);
-
-  useEffect(() => {
-    let active = true;
-    let socket: Socket | null = null;
-    let sendLocation: ((coordinates: Coordinates) => void) | null = null;
-    let latestCoordinates: Coordinates | null = null;
-    const stopWatching = watchLocation(coordinates => {
-      latestCoordinates = coordinates;
-      setDriverLocation(coordinates);
-      sendLocation?.(coordinates);
-    });
-
-    connectDriverSocket(message => {
-      if (active) console.warn('Driver location socket:', message);
-    })
-      .then(connection => {
-        if (!active) {
-          connection.socket.disconnect();
-          return;
-        }
-        socket = connection.socket;
-        sendLocation = connection.sendLocation;
-        if (latestCoordinates) sendLocation(latestCoordinates);
-      })
-      .catch(error => {
-        if (active) {
-          Alert.alert(
-            'Live location unavailable',
-            error instanceof Error ? error.message : 'Could not connect to live location service.',
-          );
-        }
-      });
-
-    return () => {
-      active = false;
-      stopWatching();
-      socket?.disconnect();
-      sendLocation = null;
-    };
-  }, []);
-
-  const handleArrived = () => {
-    setStage('arrived');
+  const loadBooking = async () => {
+    if (!bookingId) return;
+    try {
+      const response = await Api.get(`/bookings/${bookingId}`);
+      setBooking(response.data);
+    } catch (error: any) {
+      Alert.alert('Could not load booking', error.response?.data?.detail || 'Check your connection and try again.');
+    }
   };
 
+  useEffect(() => {
+    loadBooking();
+    const timer = setInterval(loadBooking, 5000);
+    return () => clearInterval(timer);
+  }, [bookingId]);
+
   const handleStartTrip = async () => {
+    if (enteredOtp.length !== 4) {
+      setOtpError(true);
+      return;
+    }
+    setOtpError(false);
+    setLoading(true);
     try {
-      await Api.post(`/driver/bookings/${bookingId}/start`);
-      setStage('in_trip');
+      await Api.post(`/driver/bookings/${bookingId}/start`, {otp: enteredOtp});
+      loadBooking();
     } catch (error: any) {
-      Alert.alert(
-        'Could not start ride',
-        error.response?.data?.detail || 'Refresh and try again.',
-      );
+      setOtpError(true);
+      Alert.alert('Start trip failed', error.response?.data?.detail || 'Enter the correct 4-digit customer OTP.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleCompleteTrip = async () => {
+    setLoading(true);
     try {
-      const response = await Api.post(
-        `/driver/bookings/${bookingId}/complete`,
-        { fare_amount: booking?.estimated_fare },
-      );
-      setBooking(previous => ({ ...previous, ...response.data }));
-      setStage('completed');
+      await Api.post(`/driver/bookings/${bookingId}/complete`);
+      loadBooking();
     } catch (error: any) {
-      Alert.alert(
-        'Could not complete ride',
-        error.response?.data?.detail || 'Refresh and try again.',
-      );
+      Alert.alert('Complete trip failed', error.response?.data?.detail || 'Try again shortly.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleFinish = () => {
-    navigation.replace('Home');
+    navigation.replace('DriverTabs');
   };
 
-  if (!booking) {
-    return (
-      <View style={[styles.container, styles.loading]}>
-        <ActivityIndicator size="large" color={colors.primary} />
-      </View>
-    );
-  }
+  const isAccepted = booking?.status === 'accepted';
+  const isInProgress = booking?.status === 'in_progress';
+  const isCompleted = booking?.status === 'completed';
+
+  const pickupCoords = booking?.pickup_latitude && booking?.pickup_longitude
+    ? {latitude: booking.pickup_latitude, longitude: booking.pickup_longitude, label: booking.pickup}
+    : null;
+  const destCoords = booking?.destination_latitude && booking?.destination_longitude
+    ? {latitude: booking.destination_latitude, longitude: booking.destination_longitude, label: booking.destination}
+    : null;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backArrow}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          Ride #{String(booking._id).slice(-8)}
-        </Text>
-        <View style={{ width: 40 }} />
-      </View>
+      {/* Screen Header */}
+      <ScreenHeader
+        title={booking ? `Trip #${booking._id.slice(-6)}` : 'Active Trip'}
+        onBack={() => navigation.goBack()}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {/* Navigation Map */}
+        contentContainerStyle={styles.content}>
+        
+        {/* Live Route Map */}
         <View style={styles.mapContainer}>
           <LiveMap
-            pickup={{
-              latitude: booking.pickup_lat,
-              longitude: booking.pickup_lon,
-              label: booking.pickup_address || 'Pickup',
-            }}
-            destination={{
-              latitude: booking.destination_lat,
-              longitude: booking.destination_lon,
-              label: booking.destination_address || 'Destination',
-            }}
-            current={driverLocation}
+            pickup={pickupCoords}
+            destination={destCoords}
             style={styles.liveMap}
           />
-
           <View style={styles.stageBanner}>
             <Text style={styles.stageText}>
-              {stage === 'navigating_pickup' && '📍 Navigating to Pickup Point'}
-              {stage === 'arrived' &&
-                '⌛ Arrived at Pickup. Waiting for Passenger.'}
-              {stage === 'in_trip' && '🚗 Driving to Destination'}
-              {stage === 'completed' && '🏁 Trip Completed! Collect Payment.'}
+              {isAccepted
+                ? '📍 Heading to Pickup Point'
+                : isInProgress
+                ? '🚗 Trip in Progress to Destination'
+                : '🏁 Ride Completed'}
             </Text>
           </View>
         </View>
@@ -198,37 +123,34 @@ const DriverRideScreen = ({ navigation, route }: DriverRideScreenProps) => {
         {/* Customer Information Card */}
         <View style={styles.card}>
           <View style={styles.customerRow}>
-            <Text style={styles.customerAvatar}>👤</Text>
+            <View style={styles.avatarCircle}>
+              <Text style={styles.customerAvatar}>👤</Text>
+            </View>
 
             <View style={styles.customerMeta}>
-              <Text style={styles.customerName}>
-                {booking.rider_name || 'Passenger'}
-              </Text>
-              <Text style={styles.customerRating}>
-                {booking.payment_method || 'Cash'} • {booking.cab_type || 'Cab'}
-              </Text>
+              <Text style={styles.customerName}>{booking?.user?.name || 'Rider'}</Text>
+              <Text style={styles.customerRating}>★ 5.0 • Cash Payment</Text>
             </View>
 
             <TouchableOpacity
               style={styles.callButton}
-              activeOpacity={0.8}
-              onPress={() => console.log('Call customer')}
-            >
+              activeOpacity={0.7}
+              onPress={() =>
+                Alert.alert('Call Rider', `Calling ${booking?.user?.phone || 'Customer'}...`)
+              }>
               <Text style={styles.callIcon}>📞</Text>
             </TouchableOpacity>
           </View>
 
           <View style={styles.divider} />
 
-          {/* Pickup & Destination */}
+          {/* Route Info */}
           <View style={styles.routeBox}>
             <View style={styles.routeRow}>
               <View style={styles.pickupDot} />
-              <View>
+              <View style={styles.routeTextContainer}>
                 <Text style={styles.routeLabel}>PICKUP</Text>
-                <Text style={styles.routeText}>
-                  {booking.pickup_address || 'Pickup location'}
-                </Text>
+                <Text style={styles.routeText} numberOfLines={1}>{booking?.pickup}</Text>
               </View>
             </View>
 
@@ -236,81 +158,77 @@ const DriverRideScreen = ({ navigation, route }: DriverRideScreenProps) => {
 
             <View style={styles.routeRow}>
               <View style={styles.dropSquare} />
-              <View>
-                <Text style={styles.routeLabel}>DESTINATION</Text>
-                <Text style={styles.routeText}>
-                  {booking.destination_address || 'Destination'}
-                </Text>
+              <View style={styles.routeTextContainer}>
+                <Text style={styles.routeLabel}>DROP</Text>
+                <Text style={styles.routeText} numberOfLines={1}>{booking?.destination}</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* Arrival confirmation */}
-        {stage === 'arrived' && (
+        {/* OTP Verification Box for Pickup */}
+        {isAccepted && (
           <View style={styles.otpBox}>
-            <Text style={styles.otpTitle}>
-              Confirm the passenger is on board before starting.
+            <Text style={styles.otpTitle}>Customer Verification Code</Text>
+            <Text style={styles.otpHint}>
+              Ask customer for their 4-digit ride OTP to start trip
             </Text>
+            <TextInput
+              style={[styles.otpInput, otpError && styles.otpInputError]}
+              placeholder="••••"
+              placeholderTextColor={colors.textMuted}
+              keyboardType="number-pad"
+              maxLength={4}
+              value={enteredOtp}
+              onChangeText={text => {
+                setEnteredOtp(text);
+                setOtpError(false);
+              }}
+            />
+            {otpError && (
+              <Text style={styles.errorText}>Invalid code. Check with customer.</Text>
+            )}
           </View>
         )}
 
-        {/* Payment Summary when completed */}
-        {stage === 'completed' && (
+        {/* Fare Summary for Completed Ride */}
+        {isCompleted && (
           <View style={styles.fareCard}>
-            <Text style={styles.fareTitle}>Total Collectible Fare</Text>
-            <Text style={styles.fareAmount}>
-              ₹{booking.fare_amount ?? booking.estimated_fare}
-            </Text>
-            <Text style={styles.paymentType}>
-              Payment Method: {booking.payment_method || 'Cash'}
-            </Text>
+            <Text style={styles.fareTitle}>CASH FARE TO COLLECT</Text>
+            <Text style={styles.fareAmount}>₹{booking?.fare || '0'}</Text>
+            <Text style={styles.paymentType}>💵 Collect Cash from Customer</Text>
           </View>
         )}
+
+        {/* Primary Action Button */}
+        <View style={styles.actionSection}>
+          {isAccepted && (
+            <Button
+              title="Verify OTP & Start Trip"
+              size="lg"
+              loading={loading}
+              onPress={handleStartTrip}
+            />
+          )}
+
+          {isInProgress && (
+            <Button
+              title="Complete Trip & Collect Fare"
+              size="lg"
+              loading={loading}
+              onPress={handleCompleteTrip}
+            />
+          )}
+
+          {isCompleted && (
+            <Button
+              title="Back to Dashboard"
+              size="lg"
+              onPress={handleFinish}
+            />
+          )}
+        </View>
       </ScrollView>
-
-      {/* Footer Controls */}
-      <View style={styles.footer}>
-        {stage === 'navigating_pickup' && (
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleArrived}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.actionButtonText}>I Have Arrived</Text>
-          </TouchableOpacity>
-        )}
-
-        {stage === 'arrived' && (
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleStartTrip}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.actionButtonText}>Start Trip</Text>
-          </TouchableOpacity>
-        )}
-
-        {stage === 'in_trip' && (
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleCompleteTrip}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.actionButtonText}>Complete Trip</Text>
-          </TouchableOpacity>
-        )}
-
-        {stage === 'completed' && (
-          <TouchableOpacity
-            style={styles.actionButton}
-            onPress={handleFinish}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.actionButtonText}>Collect Fare & Finish</Text>
-          </TouchableOpacity>
-        )}
-      </View>
     </View>
   );
 };
@@ -320,84 +238,23 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  loading: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingTop: 18,
-    paddingBottom: 12,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  backArrow: {
-    color: colors.text,
-    fontSize: 28,
-    lineHeight: 28,
-    marginTop: -3,
-  },
-  headerTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-  },
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: 110,
+    paddingTop: 8,
+    paddingBottom: 40,
   },
   mapContainer: {
-    height: 260,
-    marginTop: 10,
+    height: 240,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
     marginBottom: 16,
+    position: 'relative',
+    ...shadows.sm,
   },
   liveMap: {
-    height: 260,
-  },
-  mapGrid: {
-    ...StyleSheet.absoluteFill,
-  },
-  mapRoadHorizontal: {
-    position: 'absolute',
-    top: 90,
-    left: -20,
-    right: -20,
-    height: 24,
-    backgroundColor: '#FFFFFF',
-  },
-  mapRoadVertical: {
-    position: 'absolute',
-    left: 120,
-    top: -20,
-    bottom: -20,
-    width: 22,
-    backgroundColor: '#FFFFFF',
-  },
-  driverPin: {
-    position: 'absolute',
-    top: 80,
-    left: 110,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-  },
-  driverPinEmoji: {
-    fontSize: 22,
+    flex: 1,
   },
   stageBanner: {
     position: 'absolute',
@@ -405,10 +262,11 @@ const styles = StyleSheet.create({
     left: 12,
     right: 12,
     backgroundColor: colors.primary,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: radii.md,
     alignItems: 'center',
+    ...shadows.sm,
   },
   stageText: {
     color: colors.secondary,
@@ -417,19 +275,28 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     padding: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     marginBottom: 14,
+    ...shadows.sm,
   },
   customerRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  customerAvatar: {
-    fontSize: 28,
+  avatarCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 12,
+  },
+  customerAvatar: {
+    fontSize: 22,
   },
   customerMeta: {
     flex: 1,
@@ -438,6 +305,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     fontFamily: fonts.bold,
+    fontWeight: '700',
   },
   customerRating: {
     color: colors.textSecondary,
@@ -448,8 +316,10 @@ const styles = StyleSheet.create({
   callButton: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    backgroundColor: '#DCFCE7',
+    borderRadius: radii.pill,
+    backgroundColor: colors.successLight,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -458,7 +328,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: colors.borderLight,
     marginVertical: 12,
   },
   routeBox: {
@@ -473,113 +343,112 @@ const styles = StyleSheet.create({
     height: 8,
     borderRadius: 4,
     backgroundColor: colors.success,
-    marginRight: 10,
+    marginRight: 12,
   },
   dropSquare: {
     width: 8,
     height: 8,
+    borderRadius: 2,
     backgroundColor: colors.primary,
-    marginRight: 10,
+    marginRight: 12,
   },
   routeLine: {
-    width: 1,
-    height: 10,
+    width: 1.5,
+    height: 12,
     backgroundColor: colors.border,
-    marginLeft: 3.5,
-    marginVertical: -4,
+    marginLeft: 3.2,
+    marginVertical: -2,
+  },
+  routeTextContainer: {
+    flex: 1,
   },
   routeLabel: {
     color: colors.textSecondary,
     fontSize: 9,
     fontFamily: fonts.bold,
+    letterSpacing: 0.5,
   },
   routeText: {
     color: colors.text,
     fontSize: 13,
     fontFamily: fonts.medium,
+    marginTop: 1,
   },
   otpBox: {
     backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
+    borderRadius: radii.xl,
+    padding: 18,
+    borderWidth: 1.5,
     borderColor: colors.border,
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
+    ...shadows.sm,
   },
   otpTitle: {
     color: colors.text,
     fontSize: 15,
     fontFamily: fonts.bold,
+    fontWeight: '700',
   },
   otpHint: {
     color: colors.textSecondary,
     fontSize: 12,
-    marginTop: 2,
-    marginBottom: 12,
+    fontFamily: fonts.regular,
+    marginTop: 3,
+    marginBottom: 14,
+    textAlign: 'center',
   },
   otpInput: {
-    width: 180,
-    height: 48,
-    borderWidth: 1,
+    width: 160,
+    height: 50,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 10,
+    borderRadius: radii.md,
     textAlign: 'center',
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: fonts.bold,
     color: colors.text,
+    backgroundColor: colors.surfaceSubtle,
+    letterSpacing: 8,
+  },
+  otpInputError: {
+    borderColor: colors.danger,
   },
   errorText: {
     color: colors.danger,
     fontSize: 12,
     marginTop: 6,
+    fontFamily: fonts.medium,
   },
   fareCard: {
-    backgroundColor: colors.secondary,
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: colors.primary,
+    borderRadius: radii.xl,
+    padding: 22,
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
+    ...shadows.md,
   },
   fareTitle: {
-    color: colors.primary,
-    fontSize: 12,
+    color: '#94A3B8',
+    fontSize: 11,
     fontFamily: fonts.bold,
+    letterSpacing: 1,
   },
   fareAmount: {
-    color: colors.primary,
-    fontSize: 36,
+    color: colors.white,
+    fontSize: 40,
     fontFamily: fonts.bold,
     fontWeight: '800',
-    marginVertical: 4,
+    letterSpacing: -0.5,
+    marginVertical: 6,
   },
   paymentType: {
-    color: colors.primary,
+    color: colors.secondary,
     fontSize: 13,
     fontFamily: fonts.bold,
   },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    padding: spacing.xl,
-  },
-  actionButton: {
-    height: 52,
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  actionButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
+  actionSection: {
+    marginTop: 8,
   },
 });
 

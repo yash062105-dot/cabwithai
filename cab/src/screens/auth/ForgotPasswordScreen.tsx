@@ -1,124 +1,110 @@
 import React, {useState} from 'react';
-import {Alert} from 'react-native';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
   StatusBar,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import Api from '../../config/Api';
+import {Button, ScreenHeader} from '../../components';
 
 interface ForgotPasswordScreenProps {
   navigation: any;
 }
 
-const ForgotPasswordScreen = ({
-  navigation,
-}: ForgotPasswordScreenProps) => {
+const ForgotPasswordScreen = ({navigation}: ForgotPasswordScreenProps) => {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleContinue = async () => {
-    const digits = phone.replace(/\D/g, '');
-    if (digits.length !== 10) {
+  const handleSendCode = async () => {
+    const rawDigits = phone.replace(/\D/g, '');
+    if (rawDigits.length !== 10) {
       Alert.alert('Check your number', 'Enter a valid 10-digit mobile number.');
       return;
     }
-    const normalizedPhone = `+91${digits}`;
     setLoading(true);
     try {
-      const response = await Api.post('/auth/request-otp', {
-        phone: normalizedPhone,
-        purpose: 'login',
-      });
-      navigation.navigate('OTP', {
-        phone: normalizedPhone,
-        flow: 'login',
-        devOtp: response.data.dev_otp,
-      });
+      const normalizedPhone = `+91${rawDigits}`;
+      const response = await Api.post('/auth/request-otp', {phone: normalizedPhone, purpose: 'reset'});
+      navigation.navigate('ResetPassword', {phone: normalizedPhone, devOtp: response.data.dev_otp});
     } catch (error: any) {
-      Alert.alert('Could not send OTP', error.response?.data?.detail || 'Check that the backend is running and try again.');
+      Alert.alert('Could not start reset', error.response?.data?.detail || 'Try again shortly.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        // backgroundColor={colors.background}
-      />
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar barStyle="dark-content" />
 
-      <View style={styles.content}>
-        {/* Back */}
+      <ScreenHeader onBack={() => navigation.goBack()} />
 
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}>
-          <Text style={styles.backArrow}>‹</Text>
-        </TouchableOpacity>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scrollContent}>
+        
+        <View style={styles.badgeContainer}>
+          <Text style={styles.logo}>CAB</Text>
+        </View>
 
-        {/* Logo */}
-
-        <Text style={styles.logo}>CAB</Text>
-
-        {/* Header */}
-
-        <Text style={styles.title}>
-          Forgot Password?
-        </Text>
-
+        <Text style={styles.title}>Account Recovery</Text>
         <Text style={styles.description}>
-          Enter your registered mobile number and we'll
-          send you a verification code.
+          Enter your registered mobile number. We'll send a one-time verification code to reset your account.
         </Text>
 
-        {/* Input */}
+        <View style={styles.cardContainer}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Registered Mobile Number</Text>
+            <View style={styles.inputContainer}>
+              <View style={styles.countryCodeContainer}>
+                <Text style={styles.flag}>🇮🇳</Text>
+                <Text style={styles.countryCode}>+91</Text>
+              </View>
+              <View style={styles.verticalLine} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter 10-digit number"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="phone-pad"
+                maxLength={10}
+                value={phone}
+                onChangeText={setPhone}
+              />
+            </View>
+          </View>
 
-        <Text style={styles.label}>
-          Mobile Number
-        </Text>
-
-        <View style={styles.phoneContainer}>
-          <Text style={styles.countryCode}>
-            +91
-          </Text>
-
-          <View style={styles.verticalLine} />
-
-          <TextInput
-            style={styles.phoneInput}
-            placeholder="Enter mobile number"
-            placeholderTextColor={colors.textSecondary}
-            keyboardType="phone-pad"
-            maxLength={10}
-            value={phone}
-            onChangeText={setPhone}
+          <Button
+            title={loading ? 'Sending Code...' : 'Send Verification Code'}
+            icon="→"
+            size="lg"
+            loading={loading}
+            onPress={handleSendCode}
+            style={styles.actionBtn}
           />
         </View>
 
-        {/* Button */}
-
-        <TouchableOpacity
-          style={styles.button}
-          activeOpacity={0.8}
-          onPress={handleContinue}>
-          <Text style={styles.buttonText}>
-            {loading ? 'Sending OTP...' : 'Continue with OTP'}
-          </Text>
-
-          <Text style={styles.arrow}>
-            →
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+        <View style={styles.loginContainer}>
+          <Text style={styles.loginText}>Remembered your login?</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('Login')}
+            activeOpacity={0.7}>
+            <Text style={styles.loginLink}> Log In</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -128,123 +114,133 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  content: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: 25,
+    paddingTop: 10,
+    paddingBottom: 30,
   },
 
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-
-  backArrow: {
-    color: colors.text,
-    fontSize: 30,
-    lineHeight: 30,
-    marginTop: -4,
+  badgeContainer: {
+    backgroundColor: colors.primary,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
+    marginBottom: 16,
   },
 
   logo: {
     color: colors.secondary,
-    backgroundColor: colors.primary,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9,
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: '800',
     letterSpacing: 2,
-    marginBottom: 30,
   },
 
   title: {
     color: colors.text,
     fontSize: 28,
     fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginBottom: 10,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
 
   description: {
     color: colors.textSecondary,
     fontSize: 14,
-    lineHeight: 21,
     fontFamily: fonts.regular,
-    marginBottom: 32,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+
+  cardContainer: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+
+  inputGroup: {
+    marginBottom: 16,
   },
 
   label: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: fonts.medium,
     fontWeight: '600',
     marginBottom: 8,
   },
 
-  phoneContainer: {
-    height: 56,
-    backgroundColor: colors.white,
-    borderWidth: 1,
+  inputContainer: {
+    height: 52,
+    backgroundColor: colors.surfaceSubtle,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 14,
+    borderRadius: radii.md,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: 14,
+  },
+
+  countryCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  flag: {
+    fontSize: 16,
+    marginRight: 6,
   },
 
   countryCode: {
     color: colors.text,
     fontSize: 15,
     fontFamily: fonts.medium,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   verticalLine: {
     width: 1,
-    height: 22,
+    height: 20,
     backgroundColor: colors.border,
     marginHorizontal: 12,
   },
 
-  phoneInput: {
+  input: {
     flex: 1,
     color: colors.text,
     fontSize: 15,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
     paddingVertical: 0,
   },
 
-  button: {
-    height: 56,
-    backgroundColor: colors.primary,
-    borderRadius: 15,
+  actionBtn: {
+    marginTop: 8,
+  },
+
+  loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 25,
+    marginTop: 24,
   },
 
-  buttonText: {
-    color: colors.white,
-    fontSize: 16,
+  loginText: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    fontFamily: fonts.regular,
+  },
+
+  loginLink: {
+    color: colors.primary,
+    fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: '700',
-  },
-
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
   },
 });
 

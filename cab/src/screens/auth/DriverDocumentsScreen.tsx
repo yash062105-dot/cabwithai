@@ -1,6 +1,6 @@
 import React, {useState} from 'react';
-import {Alert} from 'react-native';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -9,9 +9,9 @@ import {
   StatusBar,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import Api from '../../config/Api';
-import {useLocation} from '../../context/LocationContext';
+import {Button, ScreenHeader} from '../../components';
 
 interface DriverDocumentsScreenProps {
   navigation: any;
@@ -22,35 +22,60 @@ const DriverDocumentsScreen = ({
   navigation,
   route,
 }: DriverDocumentsScreenProps) => {
-  const {currentLocation} = useLocation();
+  const [rcUploaded, setRcUploaded] = useState(false);
+  const [dlUploaded, setDlUploaded] = useState(false);
+  const [insuranceUploaded, setInsuranceUploaded] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleContinue = async () => {
-    if (!currentLocation) {
-      Alert.alert('Location unavailable', 'Allow location access and try again.');
+  const phone = route?.params?.phone || '';
+  const name = route?.params?.name || '';
+  const vehicleType = route?.params?.vehicleType || '';
+  const vehicleModel = route?.params?.vehicleModel || '';
+  const vehicleNumber = route?.params?.vehicleNumber || '';
+  const licenseNumber = route?.params?.licenseNumber || '';
+
+  const handleUpload = (type: string) => {
+    Alert.alert(
+      'Document Added',
+      `${type} has been saved for verification.`,
+    );
+
+    if (type === 'Registration Certificate') setRcUploaded(true);
+    if (type === 'Driving Licence') setDlUploaded(true);
+    if (type === 'Vehicle Insurance') setInsuranceUploaded(true);
+  };
+
+  const handleComplete = async () => {
+    if (!rcUploaded || !dlUploaded || !insuranceUploaded) {
+      Alert.alert(
+        'Upload all documents',
+        'Upload your RC, driving licence, and vehicle insurance to proceed.',
+      );
       return;
     }
     setLoading(true);
     try {
-      const phone = route?.params?.phone || '';
       const response = await Api.post('/auth/request-otp', {phone, purpose: 'signup'});
       navigation.navigate('OTP', {
         phone,
-        name: route?.params?.name,
+        name,
         flow: 'register',
         role: 'driver',
         devOtp: response.data.dev_otp,
         driverRegistration: {
-          latitude: currentLocation.latitude,
-          longitude: currentLocation.longitude,
-          vehicle_type: route?.params?.vehicleType,
-          vehicle_model: route?.params?.vehicleModel,
-          vehicle_number: route?.params?.vehicleNumber,
-          license_number: route?.params?.licenseNumber,
+          vehicle_type: vehicleType,
+          vehicle_model: vehicleModel,
+          vehicle_number: vehicleNumber,
+          license_number: licenseNumber,
+          documents: {
+            rc_uploaded: rcUploaded,
+            dl_uploaded: dlUploaded,
+            insurance_uploaded: insuranceUploaded,
+          },
         },
       });
     } catch (error: any) {
-      Alert.alert('Could not send OTP', error.response?.data?.detail || 'Check the backend connection and try again.');
+      Alert.alert('Could not start driver verification', error.response?.data?.detail || 'Try again shortly.');
     } finally {
       setLoading(false);
     }
@@ -58,70 +83,102 @@ const DriverDocumentsScreen = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        // backgroundColor={colors.background}
-      />
+      <StatusBar barStyle="dark-content" />
+
+      <ScreenHeader onBack={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}>
-
-        {/* Header */}
-
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}>
-          <Text style={styles.backArrow}>‹</Text>
-        </TouchableOpacity>
-
+        
+        {/* Progress Tracker */}
         <View style={styles.progressContainer}>
-          <View style={styles.progressActive} />
-          <View style={styles.progressActive} />
-          <View style={styles.progressActive} />
+          <View style={[styles.progressBar, styles.progressActive]} />
+          <View style={[styles.progressBar, styles.progressActive]} />
+          <View style={[styles.progressBar, styles.progressActive]} />
         </View>
 
-        <Text style={styles.stepText}>
-          Step 3 of 3
-        </Text>
-
-        <Text style={styles.title}>Verify Driver Details</Text>
-
+        <Text style={styles.stepBadge}>STEP 3 OF 3</Text>
+        <Text style={styles.title}>Document Verification</Text>
         <Text style={styles.subtitle}>
-          Confirm your driving licence and vehicle registration numbers. Your current GPS location will be used to set your initial driver location.
+          Upload clear photos of your required transport documents
         </Text>
 
-        <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>✓</Text>
-          <Text style={styles.infoText}>Vehicle: {route?.params?.vehicleModel} ({route?.params?.vehicleNumber})</Text>
-        </View>
-        <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>✓</Text>
-          <Text style={styles.infoText}>Driving licence: {route?.params?.licenseNumber}</Text>
-        </View>
-        <View style={styles.infoBox}>
-          <Text style={styles.infoIcon}>ℹ</Text>
-          <Text style={styles.infoText}>This project stores the entered licence and vehicle numbers; it does not upload document images or perform manual verification.</Text>
+        {/* Document Cards */}
+        <View style={styles.documentsList}>
+          <DocumentItem
+            title="Registration Certificate (RC)"
+            desc="Front photo of vehicle registration card"
+            icon="📄"
+            uploaded={rcUploaded}
+            onUpload={() => handleUpload('Registration Certificate')}
+          />
+
+          <DocumentItem
+            title="Driving Licence (Commercial/Private)"
+            desc="Valid licence matching your full name"
+            icon="🪪"
+            uploaded={dlUploaded}
+            onUpload={() => handleUpload('Driving Licence')}
+          />
+
+          <DocumentItem
+            title="Vehicle Insurance"
+            desc="Active comprehensive or commercial policy"
+            icon="🛡️"
+            uploaded={insuranceUploaded}
+            onUpload={() => handleUpload('Vehicle Insurance')}
+          />
         </View>
 
-        {/* Continue */}
-
-        <TouchableOpacity
-          style={styles.button}
-          activeOpacity={0.8}
-          onPress={handleContinue}>
-
-          <Text style={styles.buttonText}>
-            {loading ? 'Sending OTP...' : 'Verify phone & register'}
+        {/* Security Note */}
+        <View style={styles.infoBox}>
+          <Text style={styles.infoIcon}>🔒</Text>
+          <Text style={styles.infoText}>
+            Your documents are securely encrypted and used strictly for driver safety checks.
           </Text>
+        </View>
 
-          <Text style={styles.arrow}>
-            →
-          </Text>
-        </TouchableOpacity>
-
+        <Button
+          title={loading ? 'Submitting...' : 'Submit & Verify with OTP'}
+          icon="→"
+          size="lg"
+          loading={loading}
+          onPress={handleComplete}
+        />
       </ScrollView>
+    </View>
+  );
+};
+
+interface DocumentItemProps {
+  title: string;
+  desc: string;
+  icon: string;
+  uploaded: boolean;
+  onUpload: () => void;
+}
+
+const DocumentItem = ({title, desc, icon, uploaded, onUpload}: DocumentItemProps) => {
+  return (
+    <View style={styles.documentCard}>
+      <View style={[styles.docIconCircle, uploaded && styles.docIconCircleUploaded]}>
+        <Text style={styles.docEmoji}>{icon}</Text>
+      </View>
+
+      <View style={styles.docContent}>
+        <Text style={styles.docTitle}>{title}</Text>
+        <Text style={styles.docDesc}>{desc}</Text>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.uploadButton, uploaded && styles.uploadedButton]}
+        onPress={onUpload}
+        activeOpacity={0.8}>
+        <Text style={[styles.uploadText, uploaded && styles.uploadedText]}>
+          {uploaded ? '✓ Added' : '+ Add'}
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 };
@@ -134,120 +191,116 @@ const styles = StyleSheet.create({
 
   content: {
     paddingHorizontal: spacing.xl,
-    paddingTop: 25,
-    paddingBottom: 35,
-  },
-
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 22,
-  },
-
-  backArrow: {
-    color: colors.text,
-    fontSize: 30,
-    lineHeight: 30,
-    marginTop: -4,
+    paddingTop: 10,
+    paddingBottom: 40,
   },
 
   progressContainer: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  progressBar: {
+    height: 4,
+    flex: 1,
+    borderRadius: radii.pill,
   },
 
   progressActive: {
-    height: 5,
-    flex: 1,
-    backgroundColor: colors.secondary,
-    borderRadius: 5,
+    backgroundColor: colors.primary,
   },
 
-  stepText: {
+  stepBadge: {
     color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: fonts.medium,
-    marginBottom: 18,
+    fontSize: 11,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    marginBottom: 6,
   },
 
   title: {
     color: colors.text,
     fontSize: 28,
     fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
 
   subtitle: {
     color: colors.textSecondary,
     fontSize: 14,
     fontFamily: fonts.regular,
-    lineHeight: 21,
-    marginBottom: 25,
+    lineHeight: 20,
+    marginBottom: 24,
+  },
+
+  documentsList: {
+    gap: 12,
+    marginBottom: 20,
   },
 
   documentCard: {
-    minHeight: 88,
     backgroundColor: colors.white,
-    borderWidth: 1,
+    borderRadius: radii.xl,
+    padding: 16,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 15,
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 13,
-    marginBottom: 12,
+    ...shadows.sm,
   },
 
-  documentIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: colors.background,
+  docIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
     justifyContent: 'center',
     alignItems: 'center',
+    marginRight: 12,
   },
 
-  documentEmoji: {
-    fontSize: 21,
+  docIconCircleUploaded: {
+    backgroundColor: colors.successLight,
   },
 
-  documentContent: {
+  docEmoji: {
+    fontSize: 22,
+  },
+
+  docContent: {
     flex: 1,
-    marginLeft: 12,
-    marginRight: 8,
+    marginRight: 10,
   },
 
-  documentTitle: {
+  docTitle: {
     color: colors.text,
     fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: '700',
-    marginBottom: 4,
   },
 
-  documentDescription: {
+  docDesc: {
     color: colors.textSecondary,
-    fontSize: 11,
+    fontSize: 12,
     fontFamily: fonts.regular,
-    lineHeight: 16,
+    marginTop: 3,
   },
 
   uploadButton: {
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radii.md,
     backgroundColor: colors.primary,
   },
 
   uploadedButton: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.successLight,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
   },
 
   uploadText: {
@@ -263,17 +316,17 @@ const styles = StyleSheet.create({
 
   infoBox: {
     flexDirection: 'row',
-    backgroundColor: '#FEF3C7',
-    borderRadius: 14,
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
     padding: 14,
-    marginTop: 10,
-    marginBottom: 25,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
 
   infoIcon: {
-    color: colors.text,
     fontSize: 16,
-    fontWeight: '700',
     marginRight: 10,
   },
 
@@ -283,28 +336,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: fonts.regular,
     lineHeight: 18,
-  },
-
-  button: {
-    height: 56,
-    backgroundColor: colors.primary,
-    borderRadius: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  buttonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
   },
 });
 

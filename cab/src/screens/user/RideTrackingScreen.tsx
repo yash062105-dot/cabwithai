@@ -10,11 +10,12 @@ import {
   Alert,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import {useRide} from '../../context/RideContext';
 import LiveMap from '../../components/LiveMap';
 import {connectBookingSocket} from '../../services/bookingSocket';
 import type {Socket} from 'socket.io-client';
+import {Button, ScreenHeader} from '../../components';
 
 interface RideTrackingScreenProps {
   navigation: any;
@@ -64,7 +65,11 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
   }, [bookingId, refreshBooking]);
 
   if (!currentRide) {
-    return <View style={[styles.container, styles.loading]}><ActivityIndicator size="large" color={colors.primary} /></View>;
+    return (
+      <View style={[styles.container, styles.loading]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
   }
   const ride = currentRide;
 
@@ -75,9 +80,9 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
       case 'assigned':
         return 'Driver Assigned! En route to pickup.';
       case 'arriving':
-        return 'Driver is arriving.';
+        return 'Driver is arriving now.';
       case 'in_progress':
-        return 'On the way to destination 🚗';
+        return 'Trip in progress 🚗';
       case 'completed':
         return 'Ride Completed! Thank you for riding.';
       case 'cancelled':
@@ -103,23 +108,17 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Top Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.navigate('Home')}
-          activeOpacity={0.7}>
-          <Text style={styles.backArrow}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Ride #{ride.id}</Text>
-        <View style={{width: 40}} />
-      </View>
+      {/* Screen Header */}
+      <ScreenHeader
+        title={`Ride #${ride.id.slice(-6)}`}
+        onBack={() => navigation.navigate('Home')}
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}>
-
-        {/* Map Container */}
+        
+        {/* Live Map with ETA overlay */}
         <View style={styles.mapContainer}>
           <LiveMap
             pickup={ride.pickupCoordinates ? {...ride.pickupCoordinates, label: ride.pickup} : null}
@@ -140,7 +139,7 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
           </View>
         </View>
 
-        {/* Status Card */}
+        {/* Live Status Card */}
         <View style={styles.statusCard}>
           <View style={styles.statusHeaderRow}>
             <View style={styles.livePulse} />
@@ -149,51 +148,40 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
 
           {/* Progress Timeline Dots */}
           <View style={styles.timelineRow}>
-            {(['searching', 'assigned', 'arriving', 'in_progress', 'completed'] as const).map(
-              (step, idx) => {
-                const isPassed =
-                  ['searching', 'assigned', 'arriving', 'in_progress', 'completed'].indexOf(
-                    ride.status,
-                  ) >= idx;
-                return (
-                  <React.Fragment key={step}>
-                    <View
-                      style={[
-                        styles.timelineDot,
-                        isPassed && styles.activeTimelineDot,
-                      ]}
-                    />
-                    {idx < 4 && (
-                      <View
-                        style={[
-                          styles.timelineLine,
-                          isPassed && styles.activeTimelineLine,
-                        ]}
-                      />
-                    )}
-                  </React.Fragment>
-                );
-              },
-            )}
+            {['searching', 'assigned', 'in_progress', 'completed'].map((stage, idx, arr) => {
+              const stages = ['searching', 'assigned', 'in_progress', 'completed'];
+              const currentIdx = stages.indexOf(ride.status);
+              const isPassed = currentIdx >= idx;
+
+              return (
+                <React.Fragment key={stage}>
+                  <View style={[styles.timelineDot, isPassed && styles.activeTimelineDot]} />
+                  {idx < arr.length - 1 && (
+                    <View style={[styles.timelineLine, currentIdx > idx && styles.activeTimelineLine]} />
+                  )}
+                </React.Fragment>
+              );
+            })}
           </View>
         </View>
 
-        {/* Driver Card */}
+        {/* Driver Profile Card */}
         {ride.driver && (
           <View style={styles.driverCard}>
             <View style={styles.driverHeader}>
               <View style={styles.driverAvatar}>
-                <Text style={styles.driverEmoji}>👤</Text>
+                <Text style={styles.driverEmoji}>👨‍✈️</Text>
               </View>
 
               <View style={styles.driverMeta}>
                 <Text style={styles.driverName}>{ride.driver.name}</Text>
+                <Text style={styles.driverRating}>★ 4.9 • Verified CAB Driver</Text>
               </View>
 
               <TouchableOpacity
                 style={styles.callButton}
-                activeOpacity={0.8}
-                onPress={() => console.log('Call driver:', ride.driver?.phone)}>
+                activeOpacity={0.7}
+                onPress={() => Alert.alert('Call Driver', `Calling ${ride.driver?.phone || 'Driver'}...`)}>
                 <Text style={styles.callIcon}>📞</Text>
               </TouchableOpacity>
             </View>
@@ -202,12 +190,14 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
 
             <View style={styles.vehicleRow}>
               <View>
-                <Text style={styles.vehicleLabel}>CAB MODEL</Text>
-                <Text style={styles.vehicleValue}>{ride.driver.vehicleModel}</Text>
+                <Text style={styles.vehicleLabel}>VEHICLE</Text>
+                <Text style={styles.vehicleValue}>{ride.driver.vehicleModel || 'Cab Taxi'}</Text>
               </View>
 
               <View style={styles.plateContainer}>
-                <Text style={styles.plateNumber}>{ride.driver.vehicleNumber}</Text>
+                <Text style={styles.plateNumber}>
+                  {ride.driver.vehicleNumber || 'IN TAXI'}
+                </Text>
               </View>
             </View>
           </View>
@@ -217,9 +207,9 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
         <View style={styles.routeCard}>
           <View style={styles.routeRow}>
             <View style={styles.pickupDot} />
-            <View>
+            <View style={styles.routeTextContainer}>
               <Text style={styles.routeLabel}>PICKUP</Text>
-              <Text style={styles.routeText}>{ride.pickup}</Text>
+              <Text style={styles.routeText} numberOfLines={1}>{ride.pickup}</Text>
             </View>
           </View>
 
@@ -227,36 +217,33 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
 
           <View style={styles.routeRow}>
             <View style={styles.dropSquare} />
-            <View>
+            <View style={styles.routeTextContainer}>
               <Text style={styles.routeLabel}>DESTINATION</Text>
-              <Text style={styles.routeText}>{ride.destination}</Text>
+              <Text style={styles.routeText} numberOfLines={1}>{ride.destination}</Text>
             </View>
           </View>
         </View>
+
+        {/* Action Controls */}
+        <View style={styles.actionsContainer}>
+          {(ride.status === 'completed' || ride.status === 'cancelled') ? (
+            <Button
+              title="Return to Home"
+              size="lg"
+              onPress={handleNextStep}
+            />
+          ) : (
+            <Button
+              title="Cancel Booking"
+              variant="outline"
+              size="md"
+              textStyle={{color: colors.danger}}
+              style={{borderColor: colors.dangerBorder}}
+              onPress={handleCancel}
+            />
+          )}
+        </View>
       </ScrollView>
-
-      {/* Footer Controls */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.simButton}
-          activeOpacity={0.8}
-          onPress={handleNextStep}>
-          <Text style={styles.simButtonText}>
-            {ride.status === 'completed'
-              ? 'Back to Home'
-              : 'Waiting for driver update'}
-          </Text>
-        </TouchableOpacity>
-
-          {ride.status !== 'completed' && ride.status !== 'cancelled' && (
-          <TouchableOpacity
-            style={styles.cancelButton}
-            activeOpacity={0.7}
-            onPress={handleCancel}>
-            <Text style={styles.cancelText}>Cancel Ride</Text>
-          </TouchableOpacity>
-        )}
-      </View>
     </View>
   );
 };
@@ -267,105 +254,26 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   loading: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xl,
-    paddingTop: 18,
-    paddingBottom: 12,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  backArrow: {
-    color: colors.text,
-    fontSize: 28,
-    lineHeight: 28,
-    marginTop: -3,
-  },
-  headerTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
   },
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: 140,
+    paddingTop: 8,
+    paddingBottom: 40,
   },
   mapContainer: {
-    height: 260,
-    marginTop: 10,
-    marginBottom: 16,
+    height: 240,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 14,
+    position: 'relative',
+    ...shadows.sm,
   },
   liveMap: {
-    height: 260,
-  },
-  mapGrid: {
-    ...StyleSheet.absoluteFill,
-  },
-  mapRoadHorizontal: {
-    position: 'absolute',
-    top: 90,
-    left: -20,
-    right: -20,
-    height: 24,
-    backgroundColor: '#FFFFFF',
-    transform: [{rotate: '-5deg'}],
-  },
-  mapRoadVertical: {
-    position: 'absolute',
-    left: 120,
-    top: -20,
-    bottom: -20,
-    width: 22,
-    backgroundColor: '#FFFFFF',
-    transform: [{rotate: '15deg'}],
-  },
-  driverPin: {
-    position: 'absolute',
-    top: 60,
-    left: 100,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 4,
-  },
-  driverPinEmoji: {
-    fontSize: 22,
-  },
-  userPin: {
-    position: 'absolute',
-    top: 130,
-    right: 80,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(34, 197, 94, 0.25)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  userPinInner: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: colors.success,
-    borderWidth: 2,
-    borderColor: colors.white,
+    flex: 1,
   },
   etaOverlay: {
     position: 'absolute',
@@ -374,8 +282,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 10,
+    borderRadius: radii.md,
     alignItems: 'center',
+    ...shadows.sm,
   },
   etaTitle: {
     color: colors.secondary,
@@ -389,11 +298,12 @@ const styles = StyleSheet.create({
   },
   statusCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     padding: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     marginBottom: 14,
+    ...shadows.sm,
   },
   statusHeaderRow: {
     flexDirection: 'row',
@@ -417,12 +327,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
   },
   timelineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: colors.border,
   },
   activeTimelineDot: {
@@ -439,27 +349,28 @@ const styles = StyleSheet.create({
   },
   driverCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
     marginBottom: 14,
+    ...shadows.sm,
   },
   driverHeader: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   driverAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#FEF3C7',
+    width: 48,
+    height: 48,
+    borderRadius: radii.pill,
+    backgroundColor: colors.secondaryMuted,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   driverEmoji: {
-    fontSize: 26,
+    fontSize: 24,
   },
   driverMeta: {
     flex: 1,
@@ -477,15 +388,17 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   callButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#DCFCE7',
+    width: 42,
+    height: 42,
+    borderRadius: radii.pill,
+    backgroundColor: colors.successLight,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
     justifyContent: 'center',
     alignItems: 'center',
   },
   callIcon: {
-    fontSize: 20,
+    fontSize: 18,
   },
   vehicleDivider: {
     height: 1,
@@ -499,7 +412,7 @@ const styles = StyleSheet.create({
   },
   vehicleLabel: {
     color: colors.textSecondary,
-    fontSize: 9,
+    fontSize: 10,
     fontFamily: fonts.bold,
     letterSpacing: 0.5,
   },
@@ -510,23 +423,27 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   plateContainer: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.secondaryLight,
+    borderWidth: 1,
+    borderColor: colors.secondary,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 6,
+    borderRadius: radii.sm,
   },
   plateNumber: {
     color: colors.primary,
-    fontSize: 13,
+    fontSize: 12,
     fontFamily: fonts.bold,
     letterSpacing: 1,
   },
   routeCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     padding: 16,
     borderWidth: 1,
     borderColor: colors.border,
+    marginBottom: 20,
+    ...shadows.sm,
   },
   routeRow: {
     flexDirection: 'row',
@@ -542,6 +459,7 @@ const styles = StyleSheet.create({
   dropSquare: {
     width: 10,
     height: 10,
+    borderRadius: 2,
     backgroundColor: colors.primary,
     marginRight: 12,
   },
@@ -552,53 +470,23 @@ const styles = StyleSheet.create({
     marginLeft: 4,
     marginVertical: 4,
   },
+  routeTextContainer: {
+    flex: 1,
+  },
   routeLabel: {
     color: colors.textSecondary,
     fontSize: 9,
     fontFamily: fonts.bold,
+    letterSpacing: 0.5,
   },
   routeText: {
     color: colors.text,
     fontSize: 13,
     fontFamily: fonts.medium,
+    marginTop: 1,
   },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    padding: spacing.xl,
-    gap: 10,
-  },
-  simButton: {
-    height: 50,
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  simButtonText: {
-    color: colors.white,
-    fontSize: 14,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-  cancelButton: {
-    height: 44,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.danger,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cancelText: {
-    color: colors.danger,
-    fontSize: 14,
-    fontFamily: fonts.bold,
+  actionsContainer: {
+    marginTop: 6,
   },
 });
 

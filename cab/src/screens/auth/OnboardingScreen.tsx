@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useState, useRef} from 'react';
 import {
   View,
   Text,
@@ -6,9 +6,11 @@ import {
   TouchableOpacity,
   Dimensions,
   StatusBar,
+  Animated,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing} from '../../theme';
+import {Button} from '../../components';
 
 const {width} = Dimensions.get('window');
 
@@ -20,39 +22,55 @@ const onboardingData = [
   {
     title: 'Book Your Ride',
     description:
-      'Book a cab quickly and comfortably from your current location to your destination.',
+      'Book a cab quickly and comfortably from your current location to your destination with upfront pricing.',
     icon: '🚕',
+    accent: '#FEF9C3',
   },
   {
     title: 'Track Your Driver',
     description:
-      'See your driver location and estimated arrival time directly on the map.',
+      'See your driver location in real time and monitor estimated arrival time directly on the map.',
     icon: '📍',
+    accent: '#EFF6FF',
   },
   {
     title: 'Ride With Confidence',
     description:
-      'Enjoy a safe, reliable and transparent cab booking experience with CAB.',
+      'Enjoy verified drivers, cash payment options, and transparent rides across every booking.',
     icon: '🛡️',
+    accent: '#ECFDF5',
   },
 ];
 
-const OnboardingScreen = ({
-  navigation,
-}: OnboardingScreenProps) => {
+const OnboardingScreen = ({navigation}: OnboardingScreenProps) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
 
   const currentItem = onboardingData[currentIndex];
-
   const isLast = currentIndex === onboardingData.length - 1;
+
+  const transitionTo = (newIndex: number) => {
+    Animated.sequence([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+      }),
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    setCurrentIndex(newIndex);
+  };
 
   const handleNext = () => {
     if (isLast) {
       navigation.replace('Login');
       return;
     }
-
-    setCurrentIndex(prev => prev + 1);
+    transitionTo(currentIndex + 1);
   };
 
   const handleSkip = () => {
@@ -61,66 +79,60 @@ const OnboardingScreen = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-        // backgroundColor={colors.background}
-      />
+      <StatusBar barStyle="dark-content" />
 
-      {/* Skip */}
+      {/* Header Skip */}
+      <View style={styles.topBar}>
+        <View style={styles.brandRow}>
+          <View style={styles.logoBadge}>
+            <Text style={styles.logoText}>CAB</Text>
+          </View>
+        </View>
 
-      <TouchableOpacity
-        style={styles.skipButton}
-        onPress={handleSkip}
-        activeOpacity={0.7}>
-        <Text style={styles.skipText}>Skip</Text>
-      </TouchableOpacity>
+        {!isLast && (
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={handleSkip}
+            activeOpacity={0.7}
+            hitSlop={{top: 10, bottom: 10, left: 10, right: 10}}>
+            <Text style={styles.skipText}>Skip</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
-      {/* Illustration */}
-
-      <View style={styles.illustrationContainer}>
-        <View style={styles.iconCircle}>
+      {/* Dynamic Content */}
+      <Animated.View style={[styles.mainContent, {opacity: fadeAnim}]}>
+        <View style={[styles.iconCircle, {backgroundColor: currentItem.accent}]}>
           <Text style={styles.icon}>{currentItem.icon}</Text>
         </View>
+
+        <View style={styles.textContainer}>
+          <Text style={styles.title}>{currentItem.title}</Text>
+          <Text style={styles.description}>{currentItem.description}</Text>
+        </View>
+      </Animated.View>
+
+      {/* Footer Dots and Button */}
+      <View style={styles.footer}>
+        <View style={styles.dotsContainer}>
+          {onboardingData.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.dot,
+                index === currentIndex && styles.activeDot,
+              ]}
+            />
+          ))}
+        </View>
+
+        <Button
+          title={isLast ? 'Get Started' : 'Continue'}
+          icon="→"
+          size="lg"
+          onPress={handleNext}
+        />
       </View>
-
-      {/* Content */}
-
-      <View style={styles.content}>
-        <Text style={styles.title}>
-          {currentItem.title}
-        </Text>
-
-        <Text style={styles.description}>
-          {currentItem.description}
-        </Text>
-      </View>
-
-      {/* Dots */}
-
-      <View style={styles.dotsContainer}>
-        {onboardingData.map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.dot,
-              index === currentIndex && styles.activeDot,
-            ]}
-          />
-        ))}
-      </View>
-
-      {/* Button */}
-
-      <TouchableOpacity
-        style={styles.nextButton}
-        onPress={handleNext}
-        activeOpacity={0.8}>
-        <Text style={styles.nextButtonText}>
-          {isLast ? 'Get Started' : 'Continue'}
-        </Text>
-
-        <Text style={styles.arrow}>→</Text>
-      </TouchableOpacity>
     </View>
   );
 };
@@ -130,40 +142,73 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     paddingHorizontal: spacing.xl,
+    justifyContent: 'space-between',
+  },
+
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 24,
+    minHeight: 50,
+  },
+
+  brandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  logoBadge: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
+  },
+
+  logoText: {
+    color: colors.secondary,
+    fontFamily: fonts.bold,
+    fontWeight: '800',
+    fontSize: 14,
+    letterSpacing: 2,
   },
 
   skipButton: {
-    alignSelf: 'flex-end',
-    marginTop: 20,
-    padding: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
   },
 
   skipText: {
     color: colors.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: fonts.medium,
+    fontWeight: '600',
   },
 
-  illustrationContainer: {
-    height: width * 0.85,
-    justifyContent: 'center',
+  mainContent: {
     alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
   },
 
   iconCircle: {
-    width: 190,
-    height: 190,
-    borderRadius: 95,
-    backgroundColor: colors.secondary,
+    width: width * 0.52,
+    height: width * 0.52,
+    borderRadius: (width * 0.52) / 2,
     justifyContent: 'center',
     alignItems: 'center',
+    marginBottom: 40,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
   },
 
   icon: {
-    fontSize: 80,
+    fontSize: 76,
   },
 
-  content: {
+  textContainer: {
     alignItems: 'center',
     paddingHorizontal: spacing.md,
   },
@@ -172,9 +217,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 28,
     fontFamily: fonts.bold,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
-    marginBottom: spacing.md,
+    letterSpacing: -0.4,
+    marginBottom: 12,
   },
 
   description: {
@@ -183,51 +229,33 @@ const styles = StyleSheet.create({
     fontFamily: fonts.regular,
     lineHeight: 23,
     textAlign: 'center',
+    maxWidth: 320,
+  },
+
+  footer: {
+    paddingBottom: 36,
   },
 
   dotsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: spacing.xxl,
-    marginBottom: spacing.xl,
+    marginBottom: 28,
   },
 
   dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.border,
     marginHorizontal: 4,
   },
 
   activeDot: {
     width: 24,
-    backgroundColor: colors.secondary,
-  },
-
-  nextButton: {
-    height: 56,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: colors.primary,
-    borderRadius: 16,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 25,
-  },
-
-  nextButtonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
-    marginTop: -2,
   },
 });
 

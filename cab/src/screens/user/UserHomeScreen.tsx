@@ -1,4 +1,3 @@
-
 import React, {useEffect, useState} from 'react';
 import {
   Alert,
@@ -9,11 +8,12 @@ import {
   StatusBar,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import {useAuth} from '../../context/AuthContext';
 import {useLocation} from '../../context/LocationContext';
 import LiveMap from '../../components/LiveMap';
 import {reverseGeocode} from '../../services/location';
+import {Button} from '../../components';
 
 interface UserHomeScreenProps {
   navigation: any;
@@ -52,46 +52,57 @@ const UserHomeScreen = ({navigation}: UserHomeScreenProps) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
+      {/* Modern Header with User Avatar */}
       <View style={styles.header}>
-        <Text style={styles.name}>
-          Hello, {user?.name || 'User'}
-        </Text>
-        <Text style={styles.subtitle}>
-          Your location is ready
-        </Text>
+        <View style={styles.headerTextContainer}>
+          <Text style={styles.greeting}>Good day,</Text>
+          <Text style={styles.name}>{user?.name || 'Rider'}</Text>
+        </View>
+
+        <TouchableOpacity
+          style={styles.avatarButton}
+          onPress={() => navigation.navigate('Profile')}
+          activeOpacity={0.8}>
+          <Text style={styles.avatarText}>
+            {user?.name ? user.name.charAt(0).toUpperCase() : '👤'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
-      {/* Current Location */}
+      {/* Current Location Quick Card */}
       <View style={styles.locationCard}>
-        <Text style={styles.locationLabel}>
-          📍 YOUR CURRENT LOCATION
-        </Text>
+        <View style={styles.locationIconCircle}>
+          <View style={styles.pulseDot} />
+        </View>
 
-        <Text style={styles.locationText}>
-          {pickup || 'Locating your position...'}
-        </Text>
+        <View style={styles.locationTextContainer}>
+          <Text style={styles.locationLabel}>PICKUP LOCATION</Text>
+          <Text style={styles.locationText} numberOfLines={2}>
+            {pickup || 'Pinpointing your GPS position...'}
+          </Text>
+        </View>
       </View>
 
-      {/* Live Map */}
-      <LiveMap
-        current={currentLocation}
-        style={styles.mapContainer}
-      />
+      {/* Interactive Live Map Surface */}
+      <View style={styles.mapWrapper}>
+        <LiveMap
+          current={currentLocation}
+          style={styles.mapContainer}
+        />
+        <View style={styles.mapFloatingBadge}>
+          <Text style={styles.mapBadgeText}>📍 Live Area Map</Text>
+        </View>
+      </View>
 
-      {/* Find Cab Button */}
-      <TouchableOpacity
-        style={styles.bookButton}
-        activeOpacity={0.8}
-        onPress={() =>
-          navigation.navigate('BookRide', {pickup})
-        }>
-        <Text style={styles.bookButtonText}>
-          Find a Cab
-        </Text>
-
-        <Text style={styles.bookArrow}>→</Text>
-      </TouchableOpacity>
+      {/* Bottom Booking Action Container */}
+      <View style={styles.actionContainer}>
+        <Button
+          title="Find a Cab"
+          icon="→"
+          size="lg"
+          onPress={() => navigation.navigate('BookRide', {pickup})}
+        />
+      </View>
     </View>
   );
 };
@@ -101,42 +112,101 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
     paddingHorizontal: spacing.xl,
-    paddingTop: 25,
+    paddingTop: 16,
+    justifyContent: 'space-between',
   },
 
   header: {
-    marginBottom: 22,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 10,
+    marginBottom: 12,
+  },
+
+  headerTextContainer: {
+    flex: 1,
+  },
+
+  greeting: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
 
   name: {
     color: colors.text,
-    fontSize: 23,
+    fontSize: 26,
     fontFamily: fonts.bold,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginTop: 2,
   },
 
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    marginTop: 5,
-    fontFamily: fonts.regular,
+  avatarButton: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.pill,
+    backgroundColor: colors.surface,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+
+  avatarText: {
+    fontSize: 18,
+    fontFamily: fonts.bold,
+    color: colors.primary,
+    fontWeight: '700',
   },
 
   locationCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     padding: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    ...shadows.sm,
+  },
+
+  locationIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.md,
+    backgroundColor: colors.successLight,
+    borderWidth: 1,
+    borderColor: colors.successBorder,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 14,
+  },
+
+  pulseDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.success,
+  },
+
+  locationTextContainer: {
+    flex: 1,
   },
 
   locationLabel: {
     color: colors.textSecondary,
-    fontSize: 11,
+    fontSize: 10,
     fontFamily: fonts.bold,
     fontWeight: '700',
-    marginBottom: 9,
+    letterSpacing: 0.8,
+    marginBottom: 4,
   },
 
   locationText: {
@@ -144,36 +214,44 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: fonts.medium,
     fontWeight: '600',
+    lineHeight: 19,
+  },
+
+  mapWrapper: {
+    flex: 1,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 18,
+    position: 'relative',
+    ...shadows.sm,
   },
 
   mapContainer: {
-    height: 350,
-    backgroundColor: '#E8E5DA',
-    borderRadius: 18,
-    overflow: 'hidden',
-    marginBottom: 22,
+    flex: 1,
+    minHeight: 280,
   },
 
-  bookButton: {
-    height: 55,
-    backgroundColor: colors.primary,
-    borderRadius: 14,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+  mapFloatingBadge: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    backgroundColor: colors.backdrop,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
   },
 
-  bookButtonText: {
+  mapBadgeText: {
     color: colors.white,
-    fontSize: 16,
+    fontSize: 11,
     fontFamily: fonts.bold,
     fontWeight: '700',
   },
 
-  bookArrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
+  actionContainer: {
+    paddingBottom: 20,
   },
 });
 

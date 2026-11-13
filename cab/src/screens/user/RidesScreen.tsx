@@ -8,9 +8,10 @@ import {
   StatusBar,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import {useRide} from '../../context/RideContext';
 import {Ride} from '../../types/ride';
+import {Badge, EmptyState, ScreenHeader} from '../../components';
 
 interface RidesScreenProps {
   navigation: any;
@@ -26,7 +27,12 @@ const RidesScreen = ({navigation}: RidesScreenProps) => {
 
   const filteredRides = allRides.filter(ride => {
     if (activeTab === 'upcoming') {
-      return ride.status === 'searching' || ride.status === 'assigned' || ride.status === 'arriving' || ride.status === 'in_progress';
+      return (
+        ride.status === 'searching' ||
+        ride.status === 'assigned' ||
+        ride.status === 'arriving' ||
+        ride.status === 'in_progress'
+      );
     }
     if (activeTab === 'completed') {
       return ride.status === 'completed';
@@ -38,12 +44,10 @@ const RidesScreen = ({navigation}: RidesScreenProps) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Your Rides</Text>
-      </View>
+      {/* Screen Header */}
+      <ScreenHeader title="Your Rides" />
 
-      {/* Tabs */}
+      {/* Segmented Filter Control */}
       <View style={styles.tabContainer}>
         {(['upcoming', 'completed', 'cancelled'] as const).map(tab => (
           <TouchableOpacity
@@ -69,13 +73,13 @@ const RidesScreen = ({navigation}: RidesScreenProps) => {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}>
         {filteredRides.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🚕</Text>
-            <Text style={styles.emptyTitle}>No {activeTab} rides</Text>
-            <Text style={styles.emptySubtitle}>
-              Your {activeTab} ride bookings will appear here.
-            </Text>
-          </View>
+          <EmptyState
+            icon={activeTab === 'upcoming' ? '🚖' : activeTab === 'completed' ? '🏁' : '📋'}
+            title={`No ${activeTab} rides`}
+            subtitle={`Your ${activeTab} bookings and trip history will appear here.`}
+            actionTitle={activeTab === 'upcoming' ? 'Book a Ride Now' : undefined}
+            onAction={() => navigation.navigate('Home')}
+          />
         ) : (
           filteredRides.map(ride => (
             <RideCard
@@ -102,7 +106,7 @@ const RideCard = ({ride, onPress}: {ride: Ride; onPress: () => void}) => {
     <TouchableOpacity
       style={styles.card}
       onPress={onPress}
-      activeOpacity={0.8}>
+      activeOpacity={0.85}>
       <View style={styles.cardHeader}>
         <View style={styles.cabBadge}>
           <Text style={styles.cabBadgeText}>{ride.cabType}</Text>
@@ -112,27 +116,10 @@ const RideCard = ({ride, onPress}: {ride: Ride; onPress: () => void}) => {
           {ride.date} • {ride.time}
         </Text>
 
-        <View
-          style={[
-            styles.statusTag,
-            isCompleted
-              ? styles.completedTag
-              : isCancelled
-              ? styles.cancelledTag
-              : styles.upcomingTag,
-          ]}>
-          <Text
-            style={[
-              styles.statusTagText,
-              isCompleted
-                ? styles.completedTagText
-                : isCancelled
-                ? styles.cancelledTagText
-                : styles.upcomingTagText,
-            ]}>
-            {ride.status.toUpperCase()}
-          </Text>
-        </View>
+        <Badge
+          label={ride.status.toUpperCase()}
+          variant={isCompleted ? 'success' : isCancelled ? 'danger' : 'warning'}
+        />
       </View>
 
       <View style={styles.divider} />
@@ -158,11 +145,12 @@ const RideCard = ({ride, onPress}: {ride: Ride; onPress: () => void}) => {
       <View style={styles.divider} />
 
       <View style={styles.cardFooter}>
-        {ride.driver ? (
-          <Text style={styles.driverText}>👨‍✈️ {ride.driver.name}</Text>
-        ) : (
-          <Text style={styles.driverText}>CAB Service</Text>
-        )}
+        <View style={styles.driverInfoRow}>
+          <Text style={styles.driverEmoji}>👨‍✈️</Text>
+          <Text style={styles.driverText}>
+            {ride.driver ? ride.driver.name : 'CAB Driver Partner'}
+          </Text>
+        </View>
 
         <Text style={styles.fareText}>₹{ride.fare}</Text>
       </View>
@@ -175,22 +163,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 26,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: spacing.xl,
-    backgroundColor: colors.white,
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
     padding: 4,
     borderWidth: 1,
     borderColor: colors.border,
@@ -198,12 +175,13 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 9,
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: radii.sm,
   },
   activeTab: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.white,
+    ...shadows.sm,
   },
   tabText: {
     color: colors.textSecondary,
@@ -211,40 +189,22 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
   },
   activeTabText: {
-    color: colors.white,
+    color: colors.primary,
     fontFamily: fonts.bold,
     fontWeight: '700',
   },
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: 90,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    marginTop: 60,
-  },
-  emptyEmoji: {
-    fontSize: 50,
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontFamily: fonts.bold,
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontFamily: fonts.regular,
-    marginTop: 4,
+    paddingBottom: 40,
   },
   card: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     padding: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     marginBottom: 14,
+    ...shadows.sm,
   },
   cardHeader: {
     flexDirection: 'row',
@@ -252,13 +212,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   cabBadge: {
-    backgroundColor: colors.secondary,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+    paddingVertical: 3,
+    borderRadius: radii.sm,
   },
   cabBadgeText: {
-    color: colors.primary,
+    color: colors.text,
     fontSize: 11,
     fontFamily: fonts.bold,
     fontWeight: '700',
@@ -268,42 +230,9 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: fonts.medium,
   },
-  statusTag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-  },
-  statusTagText: {
-    fontSize: 10,
-    fontFamily: fonts.bold,
-  },
-  completedTag: {
-    backgroundColor: '#DCFCE7',
-  },
-  completedTagText: {
-    color: colors.success,
-    fontSize: 10,
-    fontFamily: fonts.bold,
-  },
-  cancelledTag: {
-    backgroundColor: '#FEE2E2',
-  },
-  cancelledTagText: {
-    color: colors.danger,
-    fontSize: 10,
-    fontFamily: fonts.bold,
-  },
-  upcomingTag: {
-    backgroundColor: '#FEF3C7',
-  },
-  upcomingTagText: {
-    color: colors.primary,
-    fontSize: 10,
-    fontFamily: fonts.bold,
-  },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
+    backgroundColor: colors.borderLight,
     marginVertical: 12,
   },
   locationContainer: {
@@ -323,6 +252,7 @@ const styles = StyleSheet.create({
   dropSquare: {
     width: 8,
     height: 8,
+    borderRadius: 2,
     backgroundColor: colors.primary,
     marginRight: 10,
   },
@@ -343,6 +273,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  driverInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  driverEmoji: {
+    fontSize: 14,
   },
   driverText: {
     color: colors.textSecondary,

@@ -8,10 +8,11 @@ import {
   TextInput,
   ScrollView,
   StatusBar,
+  ActivityIndicator,
 } from 'react-native';
 
-import { colors, fonts, spacing } from '../../theme';
-import {CabOption, CabType} from '../../types/ride';
+import { colors, fonts, radii, spacing, shadows } from '../../theme';
+import { CabOption, CabType } from '../../types/ride';
 import { useRide } from '../../context/RideContext';
 import Api from '../../config/Api';
 import LiveMap from '../../components/LiveMap';
@@ -22,6 +23,7 @@ import {
   searchPlaces,
 } from '../../services/location';
 import { useLocation } from '../../context/LocationContext';
+import { Button, ScreenHeader } from '../../components';
 
 interface BookRideScreenProps {
   navigation: any;
@@ -68,6 +70,7 @@ const BookRideScreen = ({ navigation, route }: BookRideScreenProps) => {
   const [searchingPlaces, setSearchingPlaces] = useState(false);
   const [placeSearchError, setPlaceSearchError] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
   const hasRoute = Boolean(pickupLat && pickupLon && destinationLat && destinationLon);
   const rawDistanceKm = hasRoute
     ? distanceKm(
@@ -145,62 +148,77 @@ const BookRideScreen = ({ navigation, route }: BookRideScreenProps) => {
       } finally {
         setSearchingPlaces(false);
       }
-    }, 500);
+    }, 400);
     return () => clearTimeout(timer);
   }, [destination, destinationLat, destinationLon]);
 
-  const chooseDestination = (place: Coordinates & { label: string }) => {
+  const handleSelectPlace = (place: PlaceResult) => {
     setDestination(place.label);
     setDestinationLat(String(place.latitude));
     setDestinationLon(String(place.longitude));
     setPlaceResults([]);
   };
 
-  const handleMapPress = async (coordinates: Coordinates) => {
-    setDestinationLat(String(coordinates.latitude));
-    setDestinationLon(String(coordinates.longitude));
-    try {
-      setDestination(await reverseGeocode(coordinates));
-    } catch {
-      setDestination(
-        `${coordinates.latitude.toFixed(5)}, ${coordinates.longitude.toFixed(
-          5,
-        )}`,
-      );
-    }
-    setPlaceResults([]);
-  };
-
   const handleConfirmBooking = async () => {
-    if (!currentLocation || !destinationLat || !destinationLon || !selectedCab) {
+    if (!selectedCabType) {
+      Alert.alert('Select a Cab', 'Please choose a cab category for your ride.');
+      return;
+    }
+    if (!pickup.trim() || !pickupLat || !pickupLon) {
       Alert.alert(
-        selectedCab ? 'Choose a destination' : 'No cabs available',
-        selectedCab
-          ? 'Search for a place or tap a destination on the map.'
-          : 'There are no available cabs right now. Please try again later.',
+        'Pickup needed',
+        'We need your current location to dispatch a driver.',
       );
       return;
     }
+    if (!destination.trim() || !destinationLat || !destinationLon) {
+      Alert.alert(
+        'Destination needed',
+        'Search and select a drop location from suggestions.',
+      );
+      return;
+    }
+
     setSubmitting(true);
     try {
-      const location = await refreshLocation();
       const response = await Api.post('/bookings', {
-        pickup_lat: location.latitude,
-        pickup_lon: location.longitude,
-        destination_lat: Number(destinationLat),
-        destination_lon: Number(destinationLon),
-        pickup_address: pickup.trim(),
-        destination_address: destination.trim(),
-        cab_type: selectedCab.type,
+        pickup,
+        destination,
+        cab_type: selectedCabType,
+        pickup_latitude: Number(pickupLat),
+        pickup_longitude: Number(pickupLon),
+        destination_latitude: Number(destinationLat),
+        destination_longitude: Number(destinationLon),
         payment_method: paymentMethod,
       });
-      setBooking(response.data);
-      navigation.replace('RideTracking');
+
+      setBooking({
+        id: response.data._id,
+        pickup,
+        destination,
+        cabType: selectedCabType,
+        fare: response.data.fare,
+        status: response.data.status,
+        date: new Date(response.data.created_at).toLocaleDateString(),
+        time: new Date(response.data.created_at).toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+        }),
+        pickupCoordinates: {
+          latitude: Number(pickupLat),
+          longitude: Number(pickupLon),
+        },
+        destinationCoordinates: {
+          latitude: Number(destinationLat),
+          longitude: Number(destinationLon),
+        },
+      });
+
+      navigation.replace('RideTracking', { rideId: response.data._id });
     } catch (error: any) {
       Alert.alert(
-        'Booking failed',
-        error.response?.data?.detail ||
-          'Check your connection and driver availability.',
+        'Booking Failed',
+        error.response?.data?.detail || 'Could not schedule ride. Please try again.',
       );
     } finally {
       setSubmitting(false);
@@ -211,33 +229,39 @@ const BookRideScreen = ({ navigation, route }: BookRideScreenProps) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Top Header */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <Text style={styles.backArrow}>‹</Text>
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Select Your Cab</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      {/* Screen Header */}
+      <ScreenHeader
+        title="Book a Ride"
+        onBack={() => navigation.goBack()}
+        rightAction={
+          <TouchableOpacity
+            style={styles.refreshBadge}
+            onPress={refreshLocation}
+            activeOpacity={0.7}>
+            <Text style={styles.refreshText}>GPS ↺</Text>
+          </TouchableOpacity>
+        }
+      />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.content}
-      >
-        {/* Location Card */}
-        <View style={styles.locationCard}>
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.content}>
+        
+        {/* Route Card: Pickup and Destination */}
+        <View style={styles.routeCard}>
           <View style={styles.locationRow}>
             <View style={styles.pickupDot} />
             <TextInput
               style={styles.locationInput}
+              placeholder="Detecting pickup location..."
+              placeholderTextColor={colors.textMuted}
               value={pickup}
-              onChangeText={setPickup}
-              placeholder="Pickup Location"
-              placeholderTextColor={colors.textSecondary}
+              onChangeText={text => {
+                setPickup(text);
+                setPickupLat('');
+                setPickupLon('');
+              }}
             />
           </View>
 
@@ -247,171 +271,180 @@ const BookRideScreen = ({ navigation, route }: BookRideScreenProps) => {
             <View style={styles.dropSquare} />
             <TextInput
               style={styles.locationInput}
+              placeholder="Where to? (e.g. Airport, Station)"
+              placeholderTextColor={colors.textMuted}
               value={destination}
-              onChangeText={setDestination}
-              placeholder="Where to?"
-              placeholderTextColor={colors.textSecondary}
+              onChangeText={text => {
+                setDestination(text);
+                setDestinationLat('');
+                setDestinationLon('');
+              }}
             />
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Choose destination</Text>
-        <TextInput
-          style={styles.destinationSearch}
-          value={destination}
-          onChangeText={value => {
-            setDestination(value);
-            setDestinationLat('');
-            setDestinationLon('');
-          }}
-          placeholder="Search a place or tap the map"
-          placeholderTextColor={colors.textSecondary}
-        />
+        {/* Destination Suggestions Dropdown */}
         {searchingPlaces && (
-          <Text style={styles.searchStatus}>Searching places...</Text>
+          <View style={styles.searchStatus}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.searchStatusText}>Searching places...</Text>
+          </View>
         )}
+
         {placeSearchError && (
-          <Text style={styles.searchStatus}>
-            Could not load place results. Check your connection and try again.
-          </Text>
+          <Text style={styles.searchErrorText}>Could not search places. Try another phrase.</Text>
         )}
-        {placeResults.map((place, index) => (
-          <TouchableOpacity
-            key={`${place.latitude}-${place.longitude}-${index}`}
-            style={styles.placeResult}
-            onPress={() => chooseDestination(place)}
-          >
-            <Text style={styles.placeResultText} numberOfLines={2}>
-              {place.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-        <LiveMap
-          pickup={{
-            latitude: Number(pickupLat),
-            longitude: Number(pickupLon),
-            label: 'Your pickup',
-          }}
-          destination={
-            destinationLat && destinationLon
-              ? {
-                  latitude: Number(destinationLat),
-                  longitude: Number(destinationLon),
-                  label: destination,
-                }
-              : null
-          }
-          current={currentLocation}
-          onMapPress={handleMapPress}
-          style={styles.map}
-        />
 
-        {/* Cab Selection Title */}
-        <Text style={styles.sectionTitle}>Available Cabs</Text>
-
-        {/* Cab List */}
-        <View style={styles.cabList}>
-          {loadingCabOptions ? (
-            <Text style={styles.searchStatus}>Loading available cabs...</Text>
-          ) : cabOptionsError ? (
-            <TouchableOpacity onPress={loadCabOptions}>
-              <Text style={styles.searchStatus}>Could not load cabs. Tap to retry.</Text>
-            </TouchableOpacity>
-          ) : cabOptions.length === 0 ? (
-            <Text style={styles.searchStatus}>No cabs are available right now.</Text>
-          ) : cabOptions.map(cab => {
-            const isSelected = selectedCabType === cab.type;
-            return (
+        {placeResults.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            {placeResults.map((item, index) => (
               <TouchableOpacity
-                key={cab.type}
-                style={[styles.cabCard, isSelected && styles.selectedCabCard]}
-                onPress={() => setSelectedCabType(cab.type)}
-                activeOpacity={0.8}
-              >
-                <View style={styles.cabInfo}>
-                  <View style={styles.cabTitleRow}>
-                    <Text style={styles.cabName}>{cab.type}</Text>
+                key={index}
+                style={styles.placeResultRow}
+                onPress={() => handleSelectPlace(item)}
+                activeOpacity={0.7}>
+                <Text style={styles.placePin}>📍</Text>
+                <Text style={styles.placeResultText} numberOfLines={1}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
 
-                    <View style={styles.capacityBadge}>
-                      <Text style={styles.capacityText}>
-                        {cab.available_drivers} available
-                      </Text>
-                    </View>
+        {/* Live Route Preview Map */}
+        <View style={styles.mapContainer}>
+          <LiveMap
+            pickup={pickupLat && pickupLon ? { latitude: Number(pickupLat), longitude: Number(pickupLon), label: pickup } : null}
+            destination={destinationLat && destinationLon ? { latitude: Number(destinationLat), longitude: Number(destinationLon), label: destination } : null}
+            style={styles.map}
+          />
+          {routeDistanceKm !== null && (
+            <View style={styles.distanceBadge}>
+              <Text style={styles.distanceText}>Est. Distance: {routeDistanceKm.toFixed(1)} km</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Cab Selection Options */}
+        <Text style={styles.sectionTitle}>Choose Cab Category</Text>
+
+        {loadingCabOptions ? (
+          <View style={styles.loadingCabBox}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.loadingCabText}>Loading available cabs...</Text>
+          </View>
+        ) : cabOptionsError ? (
+          <TouchableOpacity
+            style={styles.retryBox}
+            onPress={loadCabOptions}
+            activeOpacity={0.8}>
+            <Text style={styles.retryText}>Could not load cabs. Tap to retry ↺</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.cabList}>
+            {cabOptions.map(cab => {
+              const selected = selectedCabType === cab.type;
+              const fare = routeDistanceKm !== null
+                ? Math.max(20, Math.round(cab.base_fare + routeDistanceKm * cab.fare_per_km))
+                : cab.base_fare;
+
+              return (
+                <TouchableOpacity
+                  key={cab.type}
+                  style={[
+                    styles.cabCard,
+                    selected && styles.selectedCabCard,
+                  ]}
+                  onPress={() => setSelectedCabType(cab.type)}
+                  activeOpacity={0.85}>
+                  
+                  <View style={[styles.cabIconCircle, selected && styles.selectedCabIconCircle]}>
+                    <Text style={styles.cabIcon}>
+                      {cab.type === 'Auto' ? '🛺' : cab.type === 'SUV' ? '🚐' : cab.type === 'Sedan' ? '🚙' : '🚗'}
+                    </Text>
                   </View>
 
-                  <Text style={styles.cabDescription}>
-                    {routeDistanceKm === null ? 'Base fare' : 'Estimated trip fare'}
-                  </Text>
-                </View>
-
-                <View style={styles.priceContainer}>
-                  <Text style={styles.cabPrice}>
-                    {routeDistanceKm === null
-                      ? `From ₹${cab.base_fare}`
-                      : `₹${Math.max(
-                          20,
-                          Math.round(
-                            cab.base_fare + routeDistanceKm * cab.fare_per_km,
-                          ),
-                        )}`}
-                  </Text>
-                  {isSelected && (
-                    <View style={styles.selectedBadge}>
-                      <Text style={styles.selectedCheck}>✓</Text>
+                  <View style={styles.cabInfo}>
+                    <View style={styles.cabTitleRow}>
+                      <Text style={styles.cabName}>{cab.type}</Text>
+                      <View style={styles.capacityBadge}>
+                        <Text style={styles.capacityText}>
+                          {cab.type === 'Auto' ? '👥 3' : cab.type === 'SUV' ? '👥 6' : '👥 4'}
+                        </Text>
+                      </View>
                     </View>
-                  )}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+                    <Text style={styles.cabDescription} numberOfLines={1}>
+                      {cab.available_drivers > 0
+                        ? `${cab.available_drivers} driver${cab.available_drivers > 1 ? 's' : ''} nearby`
+                        : 'Available for immediate dispatch'}
+                    </Text>
+                    <Text style={styles.cabEta}>⚡ Fast pickup in your area</Text>
+                  </View>
+
+                  <View style={styles.priceContainer}>
+                    <Text style={styles.cabPrice}>₹{fare}</Text>
+                    {selected && (
+                      <View style={styles.selectedBadge}>
+                        <Text style={styles.selectedCheck}>✓</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Payment and Fare Details */}
+        <Text style={styles.sectionTitle}>Payment Method</Text>
+        <View style={styles.paymentMethodCard}>
+          <View style={styles.cashIconCircle}>
+            <Text style={styles.cashIcon}>💵</Text>
+          </View>
+          <View style={styles.paymentInfo}>
+            <Text style={styles.paymentTitle}>Cash in Hand</Text>
+            <Text style={styles.paymentSubtitle}>Pay the driver directly after completing the trip</Text>
+          </View>
+          <Text style={styles.verifiedCheck}>✓ Active</Text>
         </View>
 
-        <Text style={styles.cashNotice}>Payment: Cash in hand</Text>
+        {/* Price Breakdown */}
+        {selectedCab && (
+          <View style={styles.summaryCard}>
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Base Fare</Text>
+              <Text style={styles.summaryValue}>₹{selectedCab.base_fare}</Text>
+            </View>
 
-        {/* Fare Summary */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Route estimate</Text>
-            <Text style={styles.summaryValue}>
-              {routeDistanceKm === null
-                ? 'Select destination'
-                : `${routeDistanceKm.toFixed(1)} km`}
-            </Text>
+            {routeDistanceKm !== null && (
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Estimated Distance</Text>
+                <Text style={styles.summaryValue}>{routeDistanceKm.toFixed(1)} km</Text>
+              </View>
+            )}
+
+            <View style={styles.summaryDivider} />
+
+            <View style={styles.summaryRow}>
+              <Text style={styles.totalLabel}>Estimated Total</Text>
+              <Text style={styles.totalValue}>₹{estimatedFare ?? selectedCab.base_fare}</Text>
+            </View>
           </View>
-          <View style={styles.summaryDivider} />
-          <View style={styles.summaryRow}>
-            <Text style={styles.totalLabel}>Estimated Total</Text>
-            <Text style={styles.totalValue}>
-              {estimatedFare === null ? '—' : `₹${estimatedFare}`}
-            </Text>
-          </View>
+        )}
+
+        {/* Bottom Booking Button */}
+        <View style={styles.actionSection}>
+          <Button
+            title={submitting ? 'Confirming Booking...' : 'Request Cab Now'}
+            icon="→"
+            size="lg"
+            loading={submitting}
+            disabled={!selectedCabType || submitting}
+            onPress={handleConfirmBooking}
+          />
         </View>
       </ScrollView>
-
-      {/* Bottom Confirm Button */}
-      <View style={styles.footer}>
-        <TouchableOpacity
-          style={styles.confirmButton}
-          activeOpacity={0.8}
-          onPress={cabOptionsError ? loadCabOptions : handleConfirmBooking}
-          disabled={submitting || loadingCabOptions}
-        >
-          <Text style={styles.confirmButtonText}>
-            {submitting
-              ? 'Requesting driver...'
-              : loadingCabOptions
-              ? 'Loading available cabs...'
-              : cabOptionsError
-              ? 'Retry loading cabs'
-              : selectedCab && estimatedFare !== null
-              ? `Confirm ${selectedCab.type} • ₹${estimatedFare}`
-              : selectedCab
-              ? 'Choose destination'
-              : 'No cabs available'}
-          </Text>
-          <Text style={styles.arrow}>→</Text>
-        </TouchableOpacity>
-      </View>
     </View>
   );
 };
@@ -421,339 +454,413 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+
+  content: {
     paddingHorizontal: spacing.xl,
-    paddingTop: 18,
-    paddingBottom: 12,
+    paddingTop: 8,
+    paddingBottom: 40,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
+
+  refreshBadge: {
+    backgroundColor: colors.surface,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
     borderWidth: 1,
     borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  backArrow: {
-    color: colors.text,
-    fontSize: 28,
-    lineHeight: 28,
-    marginTop: -3,
-  },
-  headerTitle: {
-    color: colors.text,
-    fontSize: 18,
+
+  refreshText: {
+    color: colors.primary,
+    fontSize: 11,
     fontFamily: fonts.bold,
     fontWeight: '700',
   },
-  content: {
-    paddingHorizontal: spacing.xl,
-    paddingBottom: 110,
-  },
-  locationCard: {
+
+  routeCard: {
     backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
+    borderRadius: radii.xl,
+    padding: 16,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    marginVertical: 14,
+    marginBottom: 14,
+    ...shadows.sm,
   },
-  coordinatesCard: {
-    backgroundColor: colors.white,
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 18,
-  },
-  coordinatesTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.bold,
-  },
-  coordinatesHint: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 4,
-    marginBottom: 10,
-  },
-  coordinatesRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-  },
-  coordinateInput: {
-    flex: 1,
-    minWidth: 0,
-    height: 42,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    color: colors.text,
-    fontSize: 13,
-  },
-  destinationSearch: {
-    height: 48,
-    paddingHorizontal: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    backgroundColor: colors.white,
-    color: colors.text,
-    marginBottom: 8,
-  },
-  searchStatus: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    paddingVertical: 6,
-  },
-  placeResult: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.white,
-  },
-  placeResultText: {
-    color: colors.text,
-    fontSize: 13,
-  },
-  map: {
-    marginBottom: 18,
-  },
-  cashNotice: {
-    color: colors.text,
-    fontFamily: fonts.bold,
-    fontSize: 14,
-    paddingVertical: 12,
-  },
+
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+
   pickupDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
     backgroundColor: colors.success,
-    marginRight: 12,
+    marginRight: 14,
     marginLeft: 4,
   },
+
   dropSquare: {
     width: 10,
     height: 10,
+    borderRadius: 2,
     backgroundColor: colors.primary,
-    marginRight: 12,
+    marginRight: 14,
     marginLeft: 4,
   },
+
   locationInput: {
     flex: 1,
-    height: 42,
+    height: 44,
     color: colors.text,
     fontSize: 14,
     fontFamily: fonts.medium,
     paddingVertical: 0,
   },
+
   locationDivider: {
     height: 1,
     backgroundColor: colors.border,
     marginVertical: 6,
-    marginLeft: 26,
+    marginLeft: 28,
   },
+
+  searchStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
+
+  searchStatusText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+
+  searchErrorText: {
+    color: colors.danger,
+    fontSize: 12,
+    marginBottom: 8,
+  },
+
+  suggestionsContainer: {
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    overflow: 'hidden',
+    marginBottom: 14,
+    ...shadows.sm,
+  },
+
+  placeResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.borderLight,
+  },
+
+  placePin: {
+    fontSize: 14,
+    marginRight: 10,
+  },
+
+  placeResultText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+  },
+
+  mapContainer: {
+    height: 200,
+    borderRadius: radii.xl,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 18,
+    position: 'relative',
+    ...shadows.sm,
+  },
+
+  map: {
+    flex: 1,
+  },
+
+  distanceBadge: {
+    position: 'absolute',
+    bottom: 10,
+    left: 10,
+    backgroundColor: colors.backdrop,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radii.pill,
+  },
+
+  distanceText: {
+    color: colors.white,
+    fontSize: 11,
+    fontFamily: fonts.bold,
+  },
+
   sectionTitle: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: 13,
     fontFamily: fonts.bold,
     fontWeight: '700',
-    marginTop: 10,
-    marginBottom: 12,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 10,
   },
-  cabList: {
+
+  loadingCabBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
+    paddingVertical: 20,
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
     marginBottom: 16,
   },
+
+  loadingCabText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+  },
+
+  retryBox: {
+    backgroundColor: colors.warningLight,
+    borderWidth: 1,
+    borderColor: colors.warningBorder,
+    borderRadius: radii.lg,
+    padding: 14,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+
+  retryText: {
+    color: colors.warning,
+    fontSize: 13,
+    fontFamily: fonts.bold,
+  },
+
+  cabList: {
+    gap: 10,
+    marginBottom: 18,
+  },
+
   cabCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     padding: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
+    ...shadows.sm,
   },
+
   selectedCabCard: {
-    borderColor: colors.secondary,
-    borderWidth: 2,
-    backgroundColor: '#FFFDF5',
+    borderColor: colors.primary,
+    backgroundColor: '#FAFBFD',
   },
+
+  cabIconCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: radii.md,
+    backgroundColor: colors.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+
+  selectedCabIconCircle: {
+    backgroundColor: colors.secondaryLight,
+  },
+
   cabIcon: {
-    fontSize: 32,
-    marginRight: 14,
+    fontSize: 24,
   },
+
   cabInfo: {
     flex: 1,
   },
+
   cabTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
+
   cabName: {
     color: colors.text,
     fontSize: 15,
     fontFamily: fonts.bold,
     fontWeight: '700',
   },
+
   capacityBadge: {
-    backgroundColor: colors.background,
-    paddingHorizontal: 7,
+    backgroundColor: colors.surface,
+    paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
+    borderRadius: radii.sm,
   },
+
   capacityText: {
     color: colors.textSecondary,
-    fontSize: 11,
-    fontFamily: fonts.medium,
+    fontSize: 10,
+    fontFamily: fonts.bold,
   },
+
   cabDescription: {
     color: colors.textSecondary,
     fontSize: 12,
     fontFamily: fonts.regular,
     marginTop: 2,
   },
+
   cabEta: {
-    color: colors.primary,
+    color: colors.success,
     fontSize: 11,
     fontFamily: fonts.bold,
-    marginTop: 4,
+    marginTop: 3,
   },
+
   priceContainer: {
     alignItems: 'flex-end',
+    marginLeft: 8,
   },
+
   cabPrice: {
-    color: colors.text,
-    fontSize: 18,
-    fontFamily: fonts.bold,
-    fontWeight: '800',
-  },
-  selectedBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 6,
-  },
-  selectedCheck: {
-    color: colors.secondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  paymentContainer: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
-  },
-  paymentChip: {
-    flex: 1,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  activePaymentChip: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  paymentChipText: {
-    color: colors.text,
-    fontSize: 12,
-    fontFamily: fonts.medium,
-  },
-  activePaymentChipText: {
-    color: colors.white,
-    fontFamily: fonts.bold,
-  },
-  summaryCard: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    color: colors.textSecondary,
-    fontSize: 13,
-  },
-  summaryValue: {
-    color: colors.text,
-    fontSize: 13,
-    fontFamily: fonts.medium,
-  },
-  savingsValue: {
-    color: colors.success,
-    fontSize: 13,
-    fontFamily: fonts.bold,
-  },
-  summaryDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 8,
-  },
-  totalLabel: {
-    color: colors.text,
-    fontSize: 15,
-    fontFamily: fonts.bold,
-  },
-  totalValue: {
     color: colors.text,
     fontSize: 17,
     fontFamily: fonts.bold,
     fontWeight: '800',
   },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.white,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    padding: spacing.xl,
-  },
-  confirmButton: {
-    height: 54,
+
+  selectedBadge: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     backgroundColor: colors.primary,
-    borderRadius: 14,
-    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: 4,
   },
-  confirmButtonText: {
-    color: colors.white,
-    fontSize: 16,
+
+  selectedCheck: {
+    color: colors.secondary,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  paymentMethodCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 16,
+    ...shadows.sm,
+  },
+
+  cashIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: radii.md,
+    backgroundColor: colors.successLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+
+  cashIcon: {
+    fontSize: 20,
+  },
+
+  paymentInfo: {
+    flex: 1,
+  },
+
+  paymentTitle: {
+    color: colors.text,
+    fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: '700',
   },
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
+
+  paymentSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontFamily: fonts.regular,
+    marginTop: 1,
+  },
+
+  verifiedCheck: {
+    color: colors.success,
+    fontSize: 12,
+    fontFamily: fonts.bold,
+  },
+
+  summaryCard: {
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 20,
+  },
+
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+
+  summaryLabel: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: fonts.medium,
+  },
+
+  summaryValue: {
+    color: colors.text,
+    fontSize: 13,
+    fontFamily: fonts.bold,
+  },
+
+  summaryDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: 8,
+  },
+
+  totalLabel: {
+    color: colors.text,
+    fontSize: 15,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+  },
+
+  totalValue: {
+    color: colors.primary,
+    fontSize: 18,
+    fontFamily: fonts.bold,
+    fontWeight: '800',
+  },
+
+  actionSection: {
+    marginTop: 4,
   },
 });
 

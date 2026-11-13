@@ -8,8 +8,9 @@ import {
   Alert,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import Api from '../../config/Api';
+import {EmptyState, ScreenHeader} from '../../components';
 
 const WalletScreen = () => {
   const [transactions, setTransactions] = useState<Record<string, any>[]>([]);
@@ -17,8 +18,14 @@ const WalletScreen = () => {
   useEffect(() => {
     Api.get('/transactions/me')
       .then(response => setTransactions(response.data))
-      .catch(error => Alert.alert('Could not load transactions', error.response?.data?.detail || 'Check your connection and try again.'));
+      .catch(error =>
+        Alert.alert(
+          'Could not load transactions',
+          error.response?.data?.detail || 'Check your connection and try again.',
+        ),
+      );
   }, []);
+
   const totalPaid = transactions
     .filter(transaction => transaction.direction === 'debit')
     .reduce((sum, transaction) => sum + Number(transaction.amount || 0), 0);
@@ -27,67 +34,99 @@ const WalletScreen = () => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Cash Ride History</Text>
-      </View>
+      {/* Screen Header */}
+      <ScreenHeader title="Cash Ride History" />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}>
         
-        {/* Payment Summary */}
+        {/* Metric Cards */}
         <View style={styles.cardsRow}>
           <View style={[styles.statCard, styles.balanceCard]}>
-            <Text style={styles.statLabel}>CASH FARES RECORDED</Text>
+            <Text style={styles.statLabel}>CASH FARES PAID</Text>
             <Text style={styles.statValue}>₹{totalPaid}</Text>
+            <Text style={styles.statSub}>Total paid to drivers</Text>
           </View>
 
-          <View style={[styles.statCard, styles.savingsCard]}>
-            <Text style={styles.savingsLabel}>CASH RIDES</Text>
-            <Text style={styles.savingsValue}>{transactions.length}</Text>
-            <View style={styles.savingsBadge}>
-              <Text style={styles.savingsBadgeText}>Ride history</Text>
+          <View style={[styles.statCard, styles.ridesCard]}>
+            <Text style={styles.ridesLabel}>RECORDED TRIPS</Text>
+            <Text style={styles.ridesValue}>{transactions.length}</Text>
+            <View style={styles.ridesBadge}>
+              <Text style={styles.ridesBadgeText}>Verified Fares</Text>
             </View>
           </View>
         </View>
 
-        {/* Transaction History */}
-        <Text style={styles.sectionTitle}>Recent Transactions</Text>
-        <View style={styles.txnList}>
-          {transactions.map(txn => (
-            <View key={txn._id} style={styles.txnCard}>
-              <View
-                style={[
-                  styles.txnIconCircle,
-                  txn.direction === 'credit'
-                    ? styles.creditCircle
-                    : styles.debitCircle,
-                ]}>
-                <Text style={styles.txnIcon}>
-                  {txn.direction === 'credit' ? '↓' : '↑'}
-                </Text>
-              </View>
-
-              <View style={styles.txnInfo}>
-                <Text style={styles.txnTitle}>{txn.type === 'ride_payment' ? 'Ride payment' : 'Ride earning'}</Text>
-                <Text style={styles.txnDate}>{new Date(txn.created_at).toLocaleString()}</Text>
-              </View>
-
-              <View style={styles.txnAmountContainer}>
-                <Text
-                  style={[
-                    styles.txnAmount,
-                      txn.direction === 'credit'
-                      ? styles.creditAmount
-                      : styles.debitAmount,
-                  ]}>
-                  {txn.direction === 'credit' ? '+' : '-'}₹{txn.amount}
-                </Text>
-              </View>
-            </View>
-          ))}
+        {/* Info Banner */}
+        <View style={styles.cashNoticeCard}>
+          <Text style={styles.cashNoticeIcon}>💵</Text>
+          <View style={styles.cashNoticeTextContainer}>
+            <Text style={styles.cashNoticeTitle}>Cash Payment Model</Text>
+            <Text style={styles.cashNoticeSubtitle}>
+              All trip payments are made in hand directly to your driver upon reaching the destination.
+            </Text>
+          </View>
         </View>
+
+        {/* Transaction History List */}
+        <Text style={styles.sectionTitle}>Recent Fare Records</Text>
+
+        {transactions.length === 0 ? (
+          <EmptyState
+            icon="💳"
+            title="No transactions yet"
+            subtitle="Completed cash ride fares will appear in this ledger."
+          />
+        ) : (
+          <View style={styles.txnList}>
+            {transactions.map(txn => {
+              const isCredit = txn.direction === 'credit';
+              return (
+                <View key={txn._id} style={styles.txnCard}>
+                  <View
+                    style={[
+                      styles.txnIconCircle,
+                      isCredit ? styles.creditCircle : styles.debitCircle,
+                    ]}>
+                    <Text style={[styles.txnIcon, isCredit ? styles.creditIcon : styles.debitIcon]}>
+                      {isCredit ? '↓' : '↑'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.txnInfo}>
+                    <Text style={styles.txnTitle}>
+                      {txn.type === 'ride_payment' ? 'Cab Fare Payment' : 'Ride Settlement'}
+                    </Text>
+                    <Text style={styles.txnDate}>
+                      {new Date(txn.created_at).toLocaleDateString([], {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}{' '}
+                      •{' '}
+                      {new Date(txn.created_at).toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </Text>
+                  </View>
+
+                  <View style={styles.txnAmountContainer}>
+                    <Text
+                      style={[
+                        styles.txnAmount,
+                        isCredit ? styles.creditAmount : styles.debitAmount,
+                      ]}>
+                      {isCredit ? '+' : '-'}₹{txn.amount}
+                    </Text>
+                    <Text style={styles.paymentMethodLabel}>Cash</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -98,39 +137,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 26,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: 90,
+    paddingBottom: 40,
   },
   cardsRow: {
     flexDirection: 'row',
     gap: 12,
-    marginVertical: 12,
+    marginVertical: 10,
   },
   statCard: {
     flex: 1,
-    borderRadius: 18,
+    borderRadius: radii.xl,
     padding: 16,
     borderWidth: 1,
+    ...shadows.sm,
   },
   balanceCard: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  savingsCard: {
-    backgroundColor: colors.secondary,
-    borderColor: colors.secondary,
+  ridesCard: {
+    backgroundColor: colors.white,
+    borderColor: colors.border,
   },
   statLabel: {
     color: '#94A3B8',
@@ -140,147 +169,82 @@ const styles = StyleSheet.create({
   },
   statValue: {
     color: colors.white,
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: fonts.bold,
     fontWeight: '800',
+    marginTop: 6,
+  },
+  statSub: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 11,
     marginTop: 4,
   },
-  addMoneyButton: {
-    marginTop: 12,
-    backgroundColor: colors.secondary,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    alignSelf: 'flex-start',
-  },
-  addMoneyText: {
-    color: colors.primary,
-    fontSize: 11,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-  savingsLabel: {
+  ridesLabel: {
     color: colors.textSecondary,
     fontSize: 10,
     fontFamily: fonts.bold,
     letterSpacing: 0.5,
   },
-  savingsValue: {
+  ridesValue: {
     color: colors.text,
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: fonts.bold,
     fontWeight: '800',
-    marginTop: 4,
+    marginTop: 6,
   },
-  savingsBadge: {
-    marginTop: 12,
-    backgroundColor: 'rgba(15, 23, 42, 0.1)',
-    borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+  ridesBadge: {
+    marginTop: 6,
+    backgroundColor: colors.surface,
+    borderRadius: radii.sm,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
     alignSelf: 'flex-start',
   },
-  savingsBadgeText: {
-    color: colors.text,
-    fontSize: 11,
-    fontFamily: fonts.bold,
-  },
-  addBox: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-  addTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.bold,
-    marginBottom: 10,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
-  },
-  currencySymbol: {
-    fontSize: 16,
-    color: colors.text,
-    fontFamily: fonts.bold,
-    marginRight: 6,
-  },
-  amountInput: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 15,
-  },
-  submitAddButton: {
-    backgroundColor: colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-  },
-  submitAddText: {
-    color: colors.white,
-    fontSize: 13,
-    fontFamily: fonts.bold,
-  },
-  quickAddRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 10,
-  },
-  quickChip: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  quickChipText: {
-    color: colors.text,
-    fontSize: 12,
-    fontFamily: fonts.medium,
-  },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginTop: 12,
-    marginBottom: 12,
-  },
-  offerCard: {
-    backgroundColor: colors.white,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
-    marginBottom: 16,
-  },
-  offerTag: {
+  ridesBadgeText: {
     color: colors.primary,
     fontSize: 10,
     fontFamily: fonts.bold,
-    letterSpacing: 0.5,
   },
-  offerTitle: {
+  cashNoticeCard: {
+    flexDirection: 'row',
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginVertical: 12,
+    alignItems: 'center',
+    ...shadows.sm,
+  },
+  cashNoticeIcon: {
+    fontSize: 24,
+    marginRight: 12,
+  },
+  cashNoticeTextContainer: {
+    flex: 1,
+  },
+  cashNoticeTitle: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: 13,
     fontFamily: fonts.bold,
-    marginTop: 4,
+    fontWeight: '700',
   },
-  offerDesc: {
+  cashNoticeSubtitle: {
     color: colors.textSecondary,
     fontSize: 12,
     fontFamily: fonts.regular,
-    marginTop: 4,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  sectionTitle: {
+    color: colors.text,
+    fontSize: 13,
+    fontFamily: fonts.bold,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginTop: 8,
+    marginBottom: 12,
   },
   txnList: {
     gap: 10,
@@ -289,68 +253,70 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.white,
-    borderRadius: 14,
+    borderRadius: radii.lg,
     padding: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
+    ...shadows.sm,
   },
   txnIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
   creditCircle: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: colors.successLight,
   },
   debitCircle: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: colors.surface,
   },
   txnIcon: {
     fontSize: 16,
     fontWeight: '700',
+  },
+  creditIcon: {
+    color: colors.success,
+  },
+  debitIcon: {
+    color: colors.primary,
   },
   txnInfo: {
     flex: 1,
   },
   txnTitle: {
     color: colors.text,
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: fonts.bold,
+    fontWeight: '700',
   },
   txnDate: {
     color: colors.textSecondary,
     fontSize: 11,
     fontFamily: fonts.regular,
-    marginTop: 2,
+    marginTop: 3,
   },
   txnAmountContainer: {
     alignItems: 'flex-end',
   },
   txnAmount: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: fonts.bold,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   creditAmount: {
     color: colors.success,
   },
   debitAmount: {
-    color: colors.danger,
+    color: colors.text,
   },
-  badgeChip: {
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    marginTop: 4,
-  },
-  badgeText: {
-    color: colors.primary,
-    fontSize: 9,
-    fontFamily: fonts.bold,
+  paymentMethodLabel: {
+    color: colors.textSecondary,
+    fontSize: 10,
+    fontFamily: fonts.medium,
+    marginTop: 2,
   },
 });
 

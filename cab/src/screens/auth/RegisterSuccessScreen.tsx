@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   StatusBar,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import {UserRole} from '../../types/navigation';
+import {Button} from '../../components';
 
 interface RegisterSuccessScreenProps {
   navigation: any;
@@ -27,42 +27,36 @@ const RegisterSuccessScreen = ({
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-      />
+      <StatusBar barStyle="dark-content" />
 
       <View style={styles.content}>
-
-        {/* Success Icon */}
-
         <View style={styles.successCircle}>
-          <Text style={styles.check}>
-            ✓
+          <Text style={styles.check}>✓</Text>
+        </View>
+
+        <Text style={styles.title}>Account Created!</Text>
+
+        <Text style={styles.description}>
+          Your CAB {role === 'driver' ? 'driver ' : ''}account is now active and ready.
+          You can proceed to login and begin your journey.
+        </Text>
+
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardInfoTitle}>What's next?</Text>
+          <Text style={styles.cardInfoText}>
+            {role === 'driver'
+              ? '• Log in with your phone number\n• Verify incoming booking requests\n• Track daily earnings on your dashboard'
+              : '• Search pickup and destination\n• Select your preferred cab type\n• Track your ride in real-time'}
           </Text>
         </View>
 
-        <Text style={styles.title}>
-          Account Created!
-        </Text>
-
-        <Text style={styles.description}>
-          Your CAB {role === 'driver' ? 'driver' : ''} account has been created successfully.
-          You can now start using CAB.
-        </Text>
-
-        <TouchableOpacity
-          style={styles.button}
-          activeOpacity={0.8}
-          onPress={handleContinue}>
-          <Text style={styles.buttonText}>
-            Continue to {role === 'driver' ? 'Driver Dashboard' : 'CAB App'}
-          </Text>
-
-          <Text style={styles.arrow}>
-            →
-          </Text>
-        </TouchableOpacity>
-
+        <Button
+          title={role === 'driver' ? 'Continue to Driver Login' : 'Continue to User Login'}
+          icon="→"
+          size="lg"
+          onPress={handleContinue}
+          style={styles.actionBtn}
+        />
       </View>
     </View>
   );
@@ -82,28 +76,32 @@ const styles = StyleSheet.create({
   },
 
   successCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#DCFCE7',
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    backgroundColor: colors.successLight,
+    borderWidth: 2,
+    borderColor: colors.successBorder,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 24,
+    ...shadows.sm,
   },
 
   check: {
     color: colors.success,
-    fontSize: 52,
-    fontWeight: '700',
+    fontSize: 46,
+    fontWeight: '800',
   },
 
   title: {
     color: colors.text,
     fontSize: 28,
     fontFamily: fonts.bold,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
-    marginBottom: 12,
+    letterSpacing: -0.5,
+    marginBottom: 10,
   },
 
   description: {
@@ -113,30 +111,36 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     maxWidth: 320,
+    marginBottom: 24,
   },
 
-  button: {
+  cardInfo: {
     width: '100%',
-    height: 56,
-    backgroundColor: colors.primary,
-    borderRadius: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 35,
+    backgroundColor: colors.white,
+    borderRadius: radii.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    marginBottom: 28,
   },
 
-  buttonText: {
-    color: colors.white,
-    fontSize: 16,
+  cardInfoTitle: {
+    color: colors.text,
+    fontSize: 13,
     fontFamily: fonts.bold,
     fontWeight: '700',
+    marginBottom: 6,
   },
 
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
+  cardInfoText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: fonts.regular,
+    lineHeight: 20,
+  },
+
+  actionBtn: {
+    width: '100%',
   },
 });
 

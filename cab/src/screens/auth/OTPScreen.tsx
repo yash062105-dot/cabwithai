@@ -6,12 +6,14 @@ import {
   TextInput,
   TouchableOpacity,
   StatusBar,
+  ScrollView,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import {Alert} from 'react-native';
 import {useAuth} from '../../context/AuthContext';
 import Api from '../../config/Api';
+import {Button, ScreenHeader} from '../../components';
 
 interface OTPScreenProps {
   navigation: any;
@@ -21,15 +23,7 @@ interface OTPScreenProps {
 const OTP_LENGTH = 6;
 
 const OTPScreen = ({navigation, route}: OTPScreenProps) => {
-  const [otp, setOtp] = useState<string[]>([
-    '',
-    '',
-    '',
-    '',
-    '',
-    '',
-  ]);
-
+  const [otp, setOtp] = useState<string[]>(['', '', '', '', '', '']);
   const inputRefs = useRef<Array<any>>([]);
   const {signIn} = useAuth();
   const [loading, setLoading] = useState(false);
@@ -51,23 +45,13 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
     newOtp[index] = numericValue.charAt(0);
     setOtp(newOtp);
 
-    if (
-      numericValue &&
-      index < OTP_LENGTH - 1
-    ) {
+    if (numericValue && index < OTP_LENGTH - 1) {
       inputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleKeyPress = (
-    event: any,
-    index: number,
-  ) => {
-    if (
-      event.nativeEvent.key === 'Backspace' &&
-      !otp[index] &&
-      index > 0
-    ) {
+  const handleKeyPress = (event: any, index: number) => {
+    if (event.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
@@ -100,7 +84,10 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
       }
       await signIn(response.data.access_token, response.data.user);
     } catch (error: any) {
-      Alert.alert('Verification failed', error.response?.data?.detail || 'The OTP is invalid or expired. Request a new one and try again.');
+      Alert.alert(
+        'Verification failed',
+        error.response?.data?.detail || 'The OTP is invalid or expired. Request a new one and try again.',
+      );
     } finally {
       setLoading(false);
     }
@@ -118,101 +105,67 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
 
   return (
     <View style={styles.container}>
-      <StatusBar
-        barStyle="dark-content"
-      />
+      <StatusBar barStyle="dark-content" />
 
-      <View style={styles.content}>
-        {/* Back */}
+      <ScreenHeader onBack={() => navigation.goBack()} />
 
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}>
-          <Text style={styles.backArrow}>‹</Text>
-        </TouchableOpacity>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled">
+        
+        <View style={styles.badgeContainer}>
+          <Text style={styles.logo}>CAB</Text>
+        </View>
 
-        {/* Header */}
-
-        <Text style={styles.logo}>CAB</Text>
-
-        <Text style={styles.title}>
-          Verify Your Number
-        </Text>
-
+        <Text style={styles.title}>Verify Your Number</Text>
         <Text style={styles.description}>
-          We've sent a 6-digit verification code to
+          We sent a 6-digit verification code to
         </Text>
+        <Text style={styles.phone}>{phone || 'Your mobile number'}</Text>
 
-        <Text style={styles.phone}>
-          {phone}
-        </Text>
+        {/* OTP Input Boxes */}
+        <View style={styles.cardContainer}>
+          <View style={styles.otpContainer}>
+            {otp.map((digit, index) => (
+              <TextInput
+                key={index}
+                ref={(ref: any) => {
+                  inputRefs.current[index] = ref;
+                }}
+                style={[
+                  styles.otpInput,
+                  digit !== '' && styles.otpInputActive,
+                ]}
+                value={digit}
+                onChangeText={value => handleChange(value, index)}
+                onKeyPress={event => handleKeyPress(event, index)}
+                keyboardType="number-pad"
+                maxLength={1}
+                textAlign="center"
+                selectTextOnFocus
+              />
+            ))}
+          </View>
 
-        {/* OTP */}
+          {/* Resend Link */}
+          <View style={styles.resendContainer}>
+            <Text style={styles.resendText}>Didn't receive the code?</Text>
+            <TouchableOpacity onPress={handleResend} activeOpacity={0.7}>
+              <Text style={styles.resendButton}> Resend Code</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.otpContainer}>
-          {otp.map((digit, index) => (
-            <TextInput
-              key={index}
-              ref={(ref: any) => {
-                inputRefs.current[index] = ref;
-              }}
-              style={[
-                styles.otpInput,
-                digit !== '' && styles.otpInputActive,
-              ]}
-              value={digit}
-              onChangeText={value =>
-                handleChange(value, index)
-              }
-              onKeyPress={event =>
-                handleKeyPress(event, index)
-              }
-              keyboardType="number-pad"
-              maxLength={1}
-              textAlign="center"
-              selectTextOnFocus
-            />
-          ))}
+          <Button
+            title={loading ? 'Verifying...' : 'Verify & Continue'}
+            icon="→"
+            size="lg"
+            loading={loading}
+            onPress={handleVerify}
+            style={styles.verifyBtn}
+          />
         </View>
-
-        {/* Resend */}
-
-        <View style={styles.resendContainer}>
-          <Text style={styles.resendText}>
-            Didn't receive the code?
-          </Text>
-
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={handleResend}>
-            <Text style={styles.resendLink}>
-              {' '}Resend
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Verify */}
-
-        <TouchableOpacity
-          style={styles.verifyButton}
-          activeOpacity={0.8}
-          onPress={handleVerify}>
-          <Text style={styles.verifyText}>
-            {loading ? 'Verifying...' : 'Verify & Continue'}
-          </Text>
-
-          <Text style={styles.arrow}>
-            →
-          </Text>
-        </TouchableOpacity>
-
-        {/* Testing hint */}
-
-        <Text style={styles.testText}>
-          {route?.params?.devOtp ? `Local testing OTP: ${route.params.devOtp}` : 'Enter the code sent to your phone.'}
-        </Text>
-      </View>
+      </ScrollView>
     </View>
   );
 };
@@ -224,57 +177,41 @@ const styles = StyleSheet.create({
   },
 
   content: {
-    flex: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: 25,
+    paddingTop: 10,
+    paddingBottom: 30,
   },
 
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-
-  backArrow: {
-    color: colors.text,
-    fontSize: 30,
-    lineHeight: 30,
-    marginTop: -4,
+  badgeContainer: {
+    backgroundColor: colors.primary,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
+    marginBottom: 20,
   },
 
   logo: {
     color: colors.secondary,
-    backgroundColor: colors.primary,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9,
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: '800',
     letterSpacing: 2,
-    marginBottom: 30,
   },
 
   title: {
     color: colors.text,
     fontSize: 28,
     fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginBottom: 10,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 6,
   },
 
   description: {
     color: colors.textSecondary,
     fontSize: 14,
     fontFamily: fonts.regular,
-    lineHeight: 21,
   },
 
   phone: {
@@ -283,81 +220,64 @@ const styles = StyleSheet.create({
     fontFamily: fonts.bold,
     fontWeight: '700',
     marginTop: 4,
+    marginBottom: 26,
+  },
+
+  cardContainer: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
   },
 
   otpContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 35,
-    marginBottom: 22,
+    marginBottom: 24,
   },
 
   otpInput: {
-    width: 48,
-    height: 56,
-    backgroundColor: colors.white,
-    borderWidth: 1,
+    width: 44,
+    height: 52,
+    borderRadius: radii.md,
+    backgroundColor: colors.surfaceSubtle,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 13,
-    color: colors.text,
     fontSize: 20,
     fontFamily: fonts.bold,
     fontWeight: '700',
+    color: colors.text,
   },
 
   otpInputActive: {
     borderColor: colors.primary,
-    borderWidth: 2,
+    backgroundColor: colors.white,
   },
 
   resendContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 8,
+    alignItems: 'center',
+    marginBottom: 24,
   },
 
   resendText: {
     color: colors.textSecondary,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: fonts.regular,
   },
 
-  resendLink: {
+  resendButton: {
     color: colors.primary,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: fonts.bold,
     fontWeight: '700',
   },
 
-  verifyButton: {
-    height: 56,
-    backgroundColor: colors.primary,
-    borderRadius: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 35,
-  },
-
-  verifyText: {
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
-  },
-
-  testText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 20,
-    fontFamily: fonts.regular,
+  verifyBtn: {
+    marginTop: 4,
   },
 });
 

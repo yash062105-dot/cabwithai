@@ -1,7 +1,8 @@
 import React from 'react';
-import {StatusBar, StyleSheet, Text, TouchableOpacity, View} from 'react-native';
+import {StatusBar, StyleSheet, Text, View} from 'react-native';
 import {useAuth} from '../../context/AuthContext';
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
+import {Button} from '../../components';
 
 const AccountStatusScreen = () => {
   const {accountStatus, role, logout} = useAuth();
@@ -10,20 +11,32 @@ const AccountStatusScreen = () => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
-      <Text style={styles.icon}>{isBlocked ? '🔒' : '⏳'}</Text>
-      <Text style={styles.title}>
-        {isBlocked ? 'Account blocked' : 'Account awaiting approval'}
-      </Text>
-      <Text style={styles.message}>
-        {isBlocked
-          ? 'Your account is currently blocked. Contact support if you think this is a mistake.'
-          : role === 'driver'
-          ? 'Your driver account is inactive and needs admin approval before you can go online or accept rides.'
-          : 'Your account is inactive. Contact an administrator to reactivate it.'}
-      </Text>
-      <TouchableOpacity style={styles.button} onPress={logout} activeOpacity={0.8}>
-        <Text style={styles.buttonText}>Sign out</Text>
-      </TouchableOpacity>
+
+      <View style={styles.card}>
+        <View style={[styles.iconCircle, isBlocked ? styles.blockedCircle : styles.pendingCircle]}>
+          <Text style={styles.icon}>{isBlocked ? '🔒' : '⏳'}</Text>
+        </View>
+
+        <Text style={styles.title}>
+          {isBlocked ? 'Account Blocked' : 'Awaiting Admin Approval'}
+        </Text>
+
+        <Text style={styles.message}>
+          {isBlocked
+            ? 'Your account is currently disabled. Please contact CAB support if you believe this is an error.'
+            : role === 'driver'
+            ? 'Your driver account details have been received and are pending document approval before you can start accepting rides.'
+            : 'Your account is currently inactive. Contact CAB support to reactivate your access.'}
+        </Text>
+
+        <Button
+          title="Sign Out"
+          variant="outline"
+          size="md"
+          onPress={logout}
+          style={styles.button}
+        />
+      </View>
     </View>
   );
 };
@@ -36,35 +49,56 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     paddingHorizontal: spacing.xl,
   },
+  card: {
+    width: '100%',
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
+  },
+  iconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  blockedCircle: {
+    backgroundColor: colors.dangerLight,
+    borderWidth: 1.5,
+    borderColor: colors.dangerBorder,
+  },
+  pendingCircle: {
+    backgroundColor: colors.warningLight,
+    borderWidth: 1.5,
+    borderColor: colors.warningBorder,
+  },
   icon: {
-    fontSize: 44,
-    marginBottom: 18,
+    fontSize: 34,
   },
   title: {
     color: colors.text,
-    fontSize: 24,
+    fontSize: 22,
     fontFamily: fonts.bold,
+    fontWeight: '800',
     textAlign: 'center',
+    letterSpacing: -0.3,
   },
   message: {
     color: colors.textSecondary,
-    fontSize: 15,
+    fontSize: 14,
     fontFamily: fonts.regular,
     lineHeight: 22,
     textAlign: 'center',
-    marginTop: 12,
+    marginTop: 10,
+    marginBottom: 24,
   },
   button: {
-    backgroundColor: colors.primary,
-    borderRadius: 12,
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    marginTop: 26,
-  },
-  buttonText: {
-    color: colors.white,
-    fontFamily: fonts.bold,
-    fontSize: 15,
+    width: '100%',
   },
 });
 

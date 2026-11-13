@@ -1,5 +1,6 @@
 import React, {useState} from 'react';
 import {
+  Alert,
   View,
   Text,
   StyleSheet,
@@ -11,7 +12,9 @@ import {
   StatusBar,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
+import Api from '../../config/Api';
+import {Button, ScreenHeader} from '../../components';
 
 interface ResetPasswordScreenProps {
   navigation: any;
@@ -22,165 +25,126 @@ const ResetPasswordScreen = ({
   navigation,
   route,
 }: ResetPasswordScreenProps) => {
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+
   const phone = route?.params?.phone || '';
 
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] =
-    useState(false);
-
-  const handleReset = () => {
-    if (!password || !confirmPassword) {
-      console.log('Please fill all fields');
+  const handleReset = async () => {
+    if (otp.length !== 6) {
+      Alert.alert('Check OTP', 'Enter the complete 6-digit verification code.');
       return;
     }
-
-    if (password !== confirmPassword) {
-      console.log('Passwords do not match');
+    if (newPassword.length < 6) {
+      Alert.alert('Password too short', 'Create a password with at least 6 characters.');
       return;
     }
-
-    // API integration baad mein yahan hogi
-
-    navigation.replace('Login');
+    if (newPassword !== confirmPassword) {
+      Alert.alert('Passwords do not match', 'Check that both password fields match.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await Api.post('/auth/reset-password', {
+        phone,
+        otp,
+        password: newPassword,
+      });
+      Alert.alert('Password reset successfully', 'You can now log in with your new password.', [
+        {text: 'Log In', onPress: () => navigation.replace('Login')},
+      ]);
+    } catch (error: any) {
+      Alert.alert('Reset failed', error.response?.data?.detail || 'Verify your OTP and try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={
-        Platform.OS === 'ios' ? 'padding' : undefined
-      }>
-      <StatusBar
-        barStyle="dark-content"
-        // backgroundColor={colors.background}
-      />
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar barStyle="dark-content" />
+
+      <ScreenHeader onBack={() => navigation.goBack()} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.content}>
+        contentContainerStyle={styles.scrollContent}>
+        
+        <View style={styles.badgeContainer}>
+          <Text style={styles.logo}>CAB</Text>
+        </View>
 
-        {/* Back */}
-
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}>
-          <Text style={styles.backArrow}>‹</Text>
-        </TouchableOpacity>
-
-        {/* Logo */}
-
-        <Text style={styles.logo}>CAB</Text>
-
-        {/* Header */}
-
-        <Text style={styles.title}>
-          Create New Password
-        </Text>
-
+        <Text style={styles.title}>Set New Password</Text>
         <Text style={styles.description}>
-          Create a new password for your CAB account.
+          Enter the verification code sent to {phone} and create a new password.
         </Text>
 
-        {phone ? (
-          <Text style={styles.phone}>
-            +91 {phone}
-          </Text>
-        ) : null}
-
-        {/* Password */}
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            New Password
-          </Text>
-
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Enter new password"
-              placeholderTextColor={colors.textSecondary}
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-            />
-
-            <TouchableOpacity
-              onPress={() =>
-                setShowPassword(prev => !prev)
-              }
-              activeOpacity={0.7}>
-              <Text style={styles.showPassword}>
-                {showPassword ? 'Hide' : 'Show'}
-              </Text>
-            </TouchableOpacity>
+        <View style={styles.cardContainer}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>6-Digit OTP</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Enter 6-digit code"
+                placeholderTextColor={colors.textMuted}
+                keyboardType="number-pad"
+                maxLength={6}
+                value={otp}
+                onChangeText={setOtp}
+              />
+            </View>
           </View>
-        </View>
 
-        {/* Confirm Password */}
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            Confirm Password
-          </Text>
-
-          <View style={styles.passwordContainer}>
-            <TextInput
-              style={styles.passwordInput}
-              placeholder="Confirm new password"
-              placeholderTextColor={colors.textSecondary}
-              secureTextEntry={!showConfirmPassword}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
-
-            <TouchableOpacity
-              onPress={() =>
-                setShowConfirmPassword(prev => !prev)
-              }
-              activeOpacity={0.7}>
-              <Text style={styles.showPassword}>
-                {showConfirmPassword ? 'Hide' : 'Show'}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>New Password</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Minimum 6 characters"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry={!showPassword}
+                value={newPassword}
+                onChangeText={setNewPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                activeOpacity={0.7}>
+                <Text style={styles.showPasswordText}>
+                  {showPassword ? 'Hide' : 'Show'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Confirm New Password</Text>
+            <View style={styles.inputContainer}>
+              <TextInput
+                style={styles.input}
+                placeholder="Re-enter new password"
+                placeholderTextColor={colors.textMuted}
+                secureTextEntry={!showPassword}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+              />
+            </View>
+          </View>
+
+          <Button
+            title={loading ? 'Updating Password...' : 'Save & Continue to Login'}
+            icon="→"
+            size="lg"
+            loading={loading}
+            onPress={handleReset}
+            style={styles.actionBtn}
+          />
         </View>
-
-        {/* Password Hint */}
-
-        <View style={styles.hintContainer}>
-          <Text style={styles.hintTitle}>
-            Password should contain:
-          </Text>
-
-          <Text style={styles.hint}>
-            • At least 8 characters
-          </Text>
-
-          <Text style={styles.hint}>
-            • A combination of letters and numbers
-          </Text>
-        </View>
-
-        {/* Button */}
-
-        <TouchableOpacity
-          style={styles.button}
-          activeOpacity={0.8}
-          onPress={handleReset}>
-          <Text style={styles.buttonText}>
-            Reset Password
-          </Text>
-
-          <Text style={styles.arrow}>
-            →
-          </Text>
-        </TouchableOpacity>
-
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -192,151 +156,95 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
-  content: {
+  scrollContent: {
     flexGrow: 1,
     paddingHorizontal: spacing.xl,
-    paddingTop: 25,
+    paddingTop: 10,
     paddingBottom: 35,
   },
 
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-
-  backArrow: {
-    color: colors.text,
-    fontSize: 30,
-    lineHeight: 30,
-    marginTop: -4,
+  badgeContainer: {
+    backgroundColor: colors.primary,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
+    marginBottom: 16,
   },
 
   logo: {
     color: colors.secondary,
-    backgroundColor: colors.primary,
-    alignSelf: 'flex-start',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 9,
-    fontSize: 18,
+    fontSize: 14,
     fontFamily: fonts.bold,
     fontWeight: '800',
     letterSpacing: 2,
-    marginBottom: 30,
   },
 
   title: {
     color: colors.text,
     fontSize: 28,
     fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginBottom: 10,
+    fontWeight: '800',
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
 
   description: {
     color: colors.textSecondary,
     fontSize: 14,
-    lineHeight: 21,
     fontFamily: fonts.regular,
+    lineHeight: 22,
+    marginBottom: 24,
   },
 
-  phone: {
-    color: colors.text,
-    fontSize: 14,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginTop: 6,
-    marginBottom: 32,
+  cardContainer: {
+    backgroundColor: colors.white,
+    borderRadius: radii.xl,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.sm,
   },
 
   inputGroup: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
 
   label: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 13,
     fontFamily: fonts.medium,
     fontWeight: '600',
     marginBottom: 8,
   },
 
-  passwordContainer: {
-    height: 56,
-    backgroundColor: colors.white,
-    borderWidth: 1,
+  inputContainer: {
+    height: 52,
+    backgroundColor: colors.surfaceSubtle,
+    borderWidth: 1.5,
     borderColor: colors.border,
-    borderRadius: 14,
+    borderRadius: radii.md,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    paddingHorizontal: 14,
   },
 
-  passwordInput: {
+  input: {
     flex: 1,
     color: colors.text,
     fontSize: 15,
-    fontFamily: fonts.regular,
+    fontFamily: fonts.medium,
     paddingVertical: 0,
   },
 
-  showPassword: {
+  showPasswordText: {
     color: colors.primary,
     fontSize: 13,
-    fontFamily: fonts.medium,
-    fontWeight: '600',
-  },
-
-  hintContainer: {
-    backgroundColor: '#FEF3C7',
-    borderRadius: 14,
-    padding: 15,
-    marginTop: 2,
-    marginBottom: 25,
-  },
-
-  hintTitle: {
-    color: colors.text,
-    fontSize: 13,
     fontFamily: fonts.bold,
-    fontWeight: '700',
-    marginBottom: 6,
   },
 
-  hint: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: fonts.regular,
-    lineHeight: 19,
-  },
-
-  button: {
-    height: 56,
-    backgroundColor: colors.primary,
-    borderRadius: 15,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  buttonText: {
-    color: colors.white,
-    fontSize: 16,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-
-  arrow: {
-    color: colors.secondary,
-    fontSize: 22,
-    marginLeft: 10,
+  actionBtn: {
+    marginTop: 8,
   },
 });
 

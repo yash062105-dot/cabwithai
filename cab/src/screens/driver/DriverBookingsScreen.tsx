@@ -9,99 +9,144 @@ import {
   Alert,
 } from 'react-native';
 
-import {colors, fonts, spacing} from '../../theme';
+import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import Api from '../../config/Api';
+import {Badge, EmptyState, ScreenHeader} from '../../components';
 
 interface DriverBookingsScreenProps {
   navigation: any;
 }
 
 const DriverBookingsScreen = ({navigation}: DriverBookingsScreenProps) => {
+  const [activeTab, setActiveTab] = useState<'incoming' | 'past'>('incoming');
   const [bookings, setBookings] = useState<Record<string, any>[]>([]);
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'completed'>(
-    'completed',
-  );
 
   useEffect(() => {
     Api.get('/driver/bookings')
       .then(response => setBookings(response.data))
-      .catch(error => Alert.alert('Could not load rides', error.response?.data?.detail || 'Check your connection and try again.'));
+      .catch(error =>
+        Alert.alert(
+          'Could not load bookings',
+          error.response?.data?.detail || 'Check your connection and try again.',
+        ),
+      );
   }, []);
 
-  const visibleBookings = bookings.filter(booking =>
-    activeTab === 'upcoming'
-      ? ['requested', 'accepted', 'in_progress'].includes(booking.status)
-      : booking.status === 'completed',
+  const incomingList = bookings.filter(
+    b => b.status === 'requested' || b.status === 'accepted' || b.status === 'in_progress',
   );
+  const pastList = bookings.filter(b => b.status === 'completed' || b.status === 'cancelled');
+  const displayedList = activeTab === 'incoming' ? incomingList : pastList;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Driver Rides</Text>
-      </View>
+      {/* Screen Header */}
+      <ScreenHeader title="Assigned Bookings" />
 
-      {/* Tabs */}
+      {/* Tab Switcher */}
       <View style={styles.tabContainer}>
-        {(['upcoming', 'completed'] as const).map(tab => (
-          <TouchableOpacity
-            key={tab}
-            style={[styles.tab, activeTab === tab && styles.activeTab]}
-            onPress={() => setActiveTab(tab)}
-            activeOpacity={0.8}>
-            <Text
-              style={[
-                styles.tabText,
-                activeTab === tab && styles.activeTabText,
-              ]}>
-              {tab.charAt(0).toUpperCase() + tab.slice(1)} Rides
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'incoming' && styles.activeTab]}
+          onPress={() => setActiveTab('incoming')}
+          activeOpacity={0.8}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'incoming' && styles.activeTabText,
+            ]}>
+            Active & Pending ({incomingList.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'past' && styles.activeTab]}
+          onPress={() => setActiveTab('past')}
+          activeOpacity={0.8}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === 'past' && styles.activeTabText,
+            ]}>
+            Completed History
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}>
-        {visibleBookings.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyEmoji}>🚕</Text>
-            <Text style={styles.emptyTitle}>No {activeTab} rides</Text>
-            <Text style={styles.emptySubtitle}>
-              Stay Online on the home screen to get new ride requests.
-            </Text>
-          </View>
+        {displayedList.length === 0 ? (
+          <EmptyState
+            icon={activeTab === 'incoming' ? '🚖' : '📋'}
+            title={activeTab === 'incoming' ? 'No active bookings' : 'No trip history'}
+            subtitle={
+              activeTab === 'incoming'
+                ? 'Make sure you are Online on the dashboard to receive requests.'
+                : 'Your past completed trips will show here.'
+            }
+          />
         ) : (
-          visibleBookings.map(item => (
-            <TouchableOpacity key={item._id} style={styles.card} activeOpacity={0.8} onPress={() => navigation.getParent()?.navigate('DriverRide', {bookingId: item._id})}>
-              <View style={styles.cardHeader}>
-                <Text style={styles.riderText}>👤 {item.rider_name || 'Passenger'}</Text>
-                <Text style={styles.dateText}>{new Date(item.created_at).toLocaleString()}</Text>
-              </View>
+          displayedList.map(booking => {
+            const isCompleted = booking.status === 'completed';
+            const isCancelled = booking.status === 'cancelled';
+            const isActive = booking.status === 'accepted' || booking.status === 'in_progress';
 
-              <View style={styles.divider} />
-
-              <View style={styles.routeBox}>
-                <Text style={styles.routeText} numberOfLines={1}>
-                  📍 {item.pickup_address || 'Pickup location'}
-                </Text>
-                <Text style={styles.routeText} numberOfLines={1}>
-                  🏁 {item.destination_address || 'Destination'}
-                </Text>
-              </View>
-
-              <View style={styles.divider} />
-
-              <View style={styles.cardFooter}>
-                <View style={styles.completedBadge}>
-                  <Text style={styles.completedBadgeText}>{item.status.toUpperCase()}</Text>
+            return (
+              <TouchableOpacity
+                key={booking._id}
+                style={styles.card}
+                activeOpacity={isActive ? 0.85 : 1}
+                onPress={() => {
+                  if (isActive) {
+                    navigation.navigate('DriverRide', {bookingId: booking._id});
+                  }
+                }}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.bookingId}>TRIP #{booking._id.slice(-6)}</Text>
+                  <Badge
+                    label={booking.status.toUpperCase()}
+                    variant={isCompleted ? 'success' : isCancelled ? 'danger' : 'warning'}
+                  />
                 </View>
-                <Text style={styles.fareText}>₹{item.fare_amount ?? item.estimated_fare}</Text>
-              </View>
-            </TouchableOpacity>
-          ))
+
+                <View style={styles.riderRow}>
+                  <Text style={styles.riderAvatar}>👤</Text>
+                  <Text style={styles.riderName}>{booking.user?.name || 'Customer'}</Text>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.routeBox}>
+                  <View style={styles.routeItem}>
+                    <View style={styles.pickupDot} />
+                    <Text style={styles.routeText} numberOfLines={1}>
+                      {booking.pickup}
+                    </Text>
+                  </View>
+
+                  <View style={styles.routeLine} />
+
+                  <View style={styles.routeItem}>
+                    <View style={styles.dropSquare} />
+                    <Text style={styles.routeText} numberOfLines={1}>
+                      {booking.destination}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.divider} />
+
+                <View style={styles.cardFooter}>
+                  <Text style={styles.dateText}>
+                    {new Date(booking.created_at).toLocaleDateString()}
+                  </Text>
+                  <Text style={styles.fareAmount}>₹{booking.fare}</Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
     </View>
@@ -113,22 +158,11 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.background,
   },
-  header: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: 20,
-    paddingBottom: 10,
-  },
-  title: {
-    color: colors.text,
-    fontSize: 26,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
   tabContainer: {
     flexDirection: 'row',
     marginHorizontal: spacing.xl,
-    backgroundColor: colors.white,
-    borderRadius: 14,
+    backgroundColor: colors.surface,
+    borderRadius: radii.md,
     padding: 4,
     borderWidth: 1,
     borderColor: colors.border,
@@ -136,12 +170,13 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 9,
     alignItems: 'center',
-    borderRadius: 10,
+    borderRadius: radii.sm,
   },
   activeTab: {
-    backgroundColor: colors.primary,
+    backgroundColor: colors.white,
+    ...shadows.sm,
   },
   tabText: {
     color: colors.textSecondary,
@@ -149,64 +184,83 @@ const styles = StyleSheet.create({
     fontFamily: fonts.medium,
   },
   activeTabText: {
-    color: colors.white,
+    color: colors.primary,
     fontFamily: fonts.bold,
     fontWeight: '700',
   },
   content: {
     paddingHorizontal: spacing.xl,
-    paddingBottom: 90,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    marginTop: 60,
-  },
-  emptyEmoji: {
-    fontSize: 50,
-    marginBottom: 12,
-  },
-  emptyTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontFamily: fonts.bold,
-  },
-  emptySubtitle: {
-    color: colors.textSecondary,
-    fontSize: 13,
-    fontFamily: fonts.regular,
-    marginTop: 4,
+    paddingBottom: 40,
   },
   card: {
     backgroundColor: colors.white,
-    borderRadius: 16,
+    borderRadius: radii.xl,
     padding: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: colors.border,
     marginBottom: 14,
+    ...shadows.sm,
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  riderText: {
+  bookingId: {
+    color: colors.textSecondary,
+    fontSize: 11,
+    fontFamily: fonts.bold,
+    letterSpacing: 0.5,
+  },
+  riderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 10,
+    gap: 8,
+  },
+  riderAvatar: {
+    fontSize: 16,
+  },
+  riderName: {
     color: colors.text,
     fontSize: 15,
     fontFamily: fonts.bold,
   },
-  dateText: {
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
-    marginVertical: 10,
+    backgroundColor: colors.borderLight,
+    marginVertical: 12,
   },
   routeBox: {
-    gap: 6,
+    gap: 8,
+  },
+  routeItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pickupDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+    marginRight: 10,
+  },
+  dropSquare: {
+    width: 8,
+    height: 8,
+    borderRadius: 2,
+    backgroundColor: colors.primary,
+    marginRight: 10,
+  },
+  routeLine: {
+    width: 1.5,
+    height: 10,
+    backgroundColor: colors.border,
+    marginLeft: 3.2,
+    marginVertical: -4,
   },
   routeText: {
+    flex: 1,
     color: colors.text,
     fontSize: 13,
     fontFamily: fonts.medium,
@@ -216,20 +270,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  completedBadge: {
-    backgroundColor: '#DCFCE7',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
+  dateText: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    fontFamily: fonts.medium,
   },
-  completedBadgeText: {
-    color: colors.success,
-    fontSize: 10,
-    fontFamily: fonts.bold,
-  },
-  fareText: {
+  fareAmount: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: fonts.bold,
     fontWeight: '800',
   },
