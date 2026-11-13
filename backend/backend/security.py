@@ -40,7 +40,7 @@ def decode_token(token: str) -> dict:
 
 
 def create_otp() -> str:
-    otp = f"{secrets.randbelow(1_000_000):06d}"
+    otp = f"123456"
     print(f"Generated OTP: {otp}")  # Debugging line to print the generated OTP
     return otp
 
