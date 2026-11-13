@@ -427,7 +427,8 @@ def page_bookings(
         else:
             clauses.append({"_id": None})
     clauses.append(_date_query(created_from, created_to))
-    query = {"$and": [clause for clause in clauses if clause]}
+    filtered_clauses = [clause for clause in clauses if clause]
+    query = {"$and": filtered_clauses} if filtered_clauses else {}
     try:
         db = get_database()
         result = _paged(

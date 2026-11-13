@@ -86,6 +86,17 @@ def test_driver_signup_rejects_phone_already_used_by_user(monkeypatch):
     assert error.value.status_code == 409
 
 
+def test_login_otp_rejects_missing_account(monkeypatch):
+    database = SimpleNamespace(users=Collection(), drivers=Collection())
+    monkeypatch.setattr(auth_routes, "get_database", lambda: database)
+
+    with pytest.raises(HTTPException) as error:
+        auth_routes.request_otp(PhoneOtpRequest(phone="+919888888888", purpose="login"))
+
+    assert error.value.status_code == 404
+    assert error.value.detail == "Account does not exist"
+
+
 def test_signup_otp_reports_duplicate_phone_as_conflict(monkeypatch):
     users = Collection()
     users.records.append({"phone": "+919888888888"})

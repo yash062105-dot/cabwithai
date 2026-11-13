@@ -38,6 +38,7 @@ export interface Ride {
   rider_name?: string
   driver_name?: string
   vehicle_number?: string
+  vehicle_type?: string
   cab_type?: string
   pickup_address?: string
   destination_address?: string
@@ -53,6 +54,7 @@ export interface Ride {
   created_at?: string
   started_at?: string
   rider?: { name?: string; phone?: string } | null
+  driver?: { name?: string; vehicle_number?: string } | null
 }
 
 export interface DashboardData {

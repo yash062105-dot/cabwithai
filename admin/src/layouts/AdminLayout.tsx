@@ -95,9 +95,7 @@ export function AdminLayout({ onLogout }: AdminLayoutProps) {
             <div>
               <div className="font-bold text-base text-white tracking-wide flex items-center gap-1.5">
                 CAB CONTROL
-                <span className="text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded-sm">
-                  PRO
-                </span>
+               
               </div>
               <p className="text-[10px] font-medium text-slate-500 uppercase tracking-widest mt-0.5">
                 Operations Platform

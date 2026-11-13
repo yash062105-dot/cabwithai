@@ -79,6 +79,16 @@ export function RidesPage() {
     setPage(1)
   }
 
+  const getDisplayRiderName = (ride: Ride) =>
+    ride.rider?.name || ride.rider_name || ride.user_id || 'Passenger'
+
+  const getDisplayDriverName = (ride: Ride) =>
+    ride.driver_name || ride.driver_id || 'Driver Assigned'
+
+  const getDisplayCabType = (ride: Ride) => ride.cab_type || ride.vehicle_type || 'Cab'
+
+  const getDisplayVehicleNumber = (ride: Ride) => ride.vehicle_number || 'No plate'
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -238,20 +248,20 @@ export function RidesPage() {
 
                     <td className="py-4 px-6">
                       <p className="font-semibold text-slate-900">
-                        {ride.rider_name || 'Passenger'}
+                        {getDisplayRiderName(ride)}
                       </p>
                       <p className="text-[11px] font-mono text-slate-400 mt-0.5 truncate max-w-[120px]">
-                        {ride.user_id}
+                        {ride.user_id || 'User ID unavailable'}
                       </p>
                     </td>
 
                     <td className="py-4 px-6">
                       <p className="font-semibold text-slate-900">
-                        {ride.driver_name || 'Driver Assigned'}
+                        {getDisplayDriverName(ride)}
                       </p>
                       <p className="text-[11px] text-slate-500 mt-0.5">
-                        <span className="font-bold">{ride.cab_type || 'Cab'}</span> ·{' '}
-                        <span className="font-mono">{ride.vehicle_number || 'No plate'}</span>
+                        <span className="font-bold">{getDisplayCabType(ride)}</span> ·{' '}
+                        <span className="font-mono">{getDisplayVehicleNumber(ride)}</span>
                       </p>
                     </td>
 

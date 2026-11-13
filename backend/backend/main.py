@@ -3,6 +3,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Response
@@ -22,7 +23,7 @@ from .realtime import create_socket_app
 from .schemas import AssignmentRequest, AssignmentResponse, EtaRequest, EtaResponse
 from ml.config import MODEL_PATH
 
-load_dotenv()
+load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
 _eta_service: EtaModelService | None = None
 

@@ -6,11 +6,8 @@ import OnboardingScreen from '../screens/auth/OnboardingScreen';
 import LoginScreen from '../screens/auth/LoginScreen';
 import RegisterScreen from '../screens/auth/RegisterScreen';
 import OTPScreen from '../screens/auth/OTPScreen';
-import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
-import ResetPasswordScreen from '../screens/auth/ResetPasswordScreen';
 import RegisterSuccessScreen from '../screens/auth/RegisterSuccessScreen';
 import DriverDetailsScreen from '../screens/auth/DriverDetailsScreen';
-import DriverDocumentsScreen from '../screens/auth/DriverDocumentsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -48,23 +45,8 @@ const AuthNavigator = () => {
       />
 
       <Stack.Screen
-        name="ForgotPassword"
-        component={ForgotPasswordScreen}
-      />
-
-      <Stack.Screen
-        name="ResetPassword"
-        component={ResetPasswordScreen}
-      />
-
-      <Stack.Screen
         name="DriverDetails"
         component={DriverDetailsScreen}
-      />
-
-      <Stack.Screen
-        name="DriverDocuments"
-        component={DriverDocumentsScreen}
       />
 
       <Stack.Screen

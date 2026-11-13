@@ -143,3 +143,53 @@ def test_driver_can_start_accepted_booking_without_otp(monkeypatch):
 
     assert result["status"] == "in_progress"
     assert updates[0][1]["$set"]["status"] == "in_progress"
+
+
+def test_admin_bookings_page_handles_empty_filters(monkeypatch):
+    from backend.admin_data import page_bookings
+
+    booking = {
+        "_id": "booking-1",
+        "status": "completed",
+        "created_at": "2026-01-01T00:00:00Z",
+    }
+
+    class Bookings:
+        def count_documents(self, query):
+            assert query == {}
+            return 1
+
+        def find(self, query, projection=None):
+            assert query == {}
+            assert projection is None
+            return SimpleNamespace(
+                sort=lambda field, direction: SimpleNamespace(
+                    skip=lambda _: SimpleNamespace(limit=lambda _: [booking])
+                )
+            )
+
+    class Transactions:
+        def find_one(self, query, projection=None):
+            assert query["booking_id"] == "booking-1"
+            return None
+
+    monkeypatch.setattr(
+        "backend.admin_data.get_database",
+        lambda: SimpleNamespace(bookings=Bookings(), transactions=Transactions()),
+    )
+
+    result = page_bookings(
+        page=1,
+        page_size=25,
+        status=None,
+        search=None,
+        user_id=None,
+        driver_id=None,
+        created_from=None,
+        created_to=None,
+        sort_order="desc",
+    )
+
+    assert result["total"] == 1
+    assert result["items"][0]["_id"] == "booking-1"
+    assert result["items"][0]["payment_status"] == "unpaid"

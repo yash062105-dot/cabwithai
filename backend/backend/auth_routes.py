@@ -87,7 +87,7 @@ def request_otp(request: PhoneOtpRequest) -> MessageResponse:
         user = db.users.find_one({"phone": phone})
         driver = db.drivers.find_one({"phone": phone}) if request.purpose == "login" else None
         if request.purpose == "login" and not user and not driver:
-            return MessageResponse(message="If the account exists, an OTP has been sent")
+            raise HTTPException(status_code=404, detail="Account does not exist")
         if request.purpose == "reset" and not user:
             return MessageResponse(message="If the account exists, an OTP has been sent")
         if request.purpose == "signup" and (user or db.drivers.find_one({"phone": phone})):

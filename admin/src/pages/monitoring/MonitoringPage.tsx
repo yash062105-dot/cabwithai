@@ -10,6 +10,7 @@ import { formatDate } from '../../utils/formatters'
 import {
   Radio,
   Navigation,
+  RefreshCw,
 } from 'lucide-react'
 
 export function MonitoringPage() {
@@ -17,8 +18,10 @@ export function MonitoringPage() {
   const [selected, setSelected] = useState<MonitoringDriver | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
   const load = useCallback(async () => {
+    setRefreshing(true)
     try {
       const result = await adminService.getMonitoringFleet(200)
       setData(result)
@@ -33,16 +36,12 @@ export function MonitoringPage() {
       setError(reason instanceof Error ? reason.message : 'Live fleet could not be loaded.')
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }, [])
 
   useEffect(() => {
-    const initialTimer = window.setTimeout(load, 0)
-    const timer = window.setInterval(load, 10_000)
-    return () => {
-      window.clearTimeout(initialTimer)
-      window.clearInterval(timer)
-    }
+    void load()
   }, [load])
 
   const ride = selected?.current_ride as Ride | null | undefined
@@ -59,15 +58,17 @@ export function MonitoringPage() {
     <div className="space-y-6">
       <PageHeader
         title="Live Fleet Radar & Telemetry"
-        description="Real-time geographic tracking of online drivers, active trips, and telemetry updates (auto-refreshes every 10s)."
+        description="Latest fleet telemetry for online drivers and active trips. Use refresh when you need the newest snapshot."
         actions={
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            Polling Live (10s interval)
-          </div>
+          <button
+            type="button"
+            onClick={() => void load()}
+            disabled={loading || refreshing}
+            className="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition hover:bg-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing…' : 'Refresh now'}
+          </button>
         }
       />
 

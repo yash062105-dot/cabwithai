@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 
 import { colors, fonts, radii, spacing, shadows } from '../../theme';
-import { UserRole } from '../../types/navigation';
 import Api from '../../config/Api';
 import { Button } from '../../components';
 
@@ -22,7 +21,6 @@ interface LoginScreenProps {
 }
 
 const LoginScreen = ({ navigation }: LoginScreenProps) => {
-  const [role, setRole] = useState<UserRole>('user');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -36,9 +34,13 @@ const LoginScreen = ({ navigation }: LoginScreenProps) => {
     setLoading(true);
     try {
       const response = await Api.post('/auth/request-otp', { phone: normalizedPhone, purpose: 'login' });
-      navigation.navigate('OTP', { phone: normalizedPhone, flow: 'login', role, devOtp: response.data.dev_otp });
+      navigation.navigate('OTP', { phone: normalizedPhone, flow: 'login', devOtp: response.data.dev_otp });
     } catch (error: any) {
-      Alert.alert('Could not send OTP', error.response?.data?.detail || 'Check that the backend is running and try again.');
+      const detail = error.response?.data?.detail || 'Check that the backend is running and try again.';
+      Alert.alert(
+        detail === 'Account does not exist' ? 'Account not found' : 'Could not send OTP',
+        detail === 'Account does not exist' ? 'No account exists for this phone number.' : detail,
+      );
     } finally {
       setLoading(false);
     }
@@ -66,39 +68,6 @@ const LoginScreen = ({ navigation }: LoginScreenProps) => {
           <Text style={styles.subtitle}>Log in to book a ride or manage your trips</Text>
         </View>
 
-        {/* Role Toggle Switch */}
-        <View style={styles.roleToggleContainer}>
-          <TouchableOpacity
-            style={[styles.roleTab, role === 'user' && styles.activeRoleTab]}
-            onPress={() => setRole('user')}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.roleTabText,
-                role === 'user' && styles.activeRoleTabText,
-              ]}
-            >
-              👤 Book a Cab
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.roleTab, role === 'driver' && styles.activeRoleTab]}
-            onPress={() => setRole('driver')}
-            activeOpacity={0.8}
-          >
-            <Text
-              style={[
-                styles.roleTabText,
-                role === 'driver' && styles.activeRoleTabText,
-              ]}
-            >
-              🚗 Drive with CAB
-            </Text>
-          </TouchableOpacity>
-        </View>
-
         {/* Form Card */}
         <View style={styles.cardContainer}>
           <View style={styles.inputGroup}>
@@ -123,15 +92,6 @@ const LoginScreen = ({ navigation }: LoginScreenProps) => {
               />
             </View>
           </View>
-
-          <TouchableOpacity
-            style={styles.forgotButton}
-            onPress={() => navigation.navigate('ForgotPassword')}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Text style={styles.forgotText}>Trouble signing in?</Text>
-          </TouchableOpacity>
 
           {/* Action Button */}
           <Button

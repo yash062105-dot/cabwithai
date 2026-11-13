@@ -119,12 +119,6 @@ export function LoginPage({ onLogin }: LoginPageProps) {
             </button>
           </form>
 
-          <div className="mt-6 pt-5 border-t border-slate-700/60 text-center">
-            <span className="inline-flex items-center gap-2 text-xs text-slate-400">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Direct database API authentication
-            </span>
-          </div>
         </div>
       </div>
     </div>

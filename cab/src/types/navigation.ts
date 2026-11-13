@@ -20,21 +20,9 @@ export type AuthStackParamList = {
       license_number: string;
     };
   };
-  ForgotPassword: undefined;
-  ResetPassword: {
-    phone: string;
-  };
   DriverDetails: {
     phone: string;
     name: string;
-  };
-  DriverDocuments: {
-    phone: string;
-    name: string;
-    vehicleType: string;
-    vehicleModel: string;
-    vehicleNumber: string;
-    licenseNumber: string;
   };
   RegisterSuccess: {
     role?: UserRole;

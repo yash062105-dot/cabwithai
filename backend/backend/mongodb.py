@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 from bson import ObjectId
+from dotenv import load_dotenv
 from pymongo import ASCENDING, DESCENDING, MongoClient
+
+load_dotenv(Path(__file__).resolve().parents[1] / '.env')
 
 _client: MongoClient | None = None
 
