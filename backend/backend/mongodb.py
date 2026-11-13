@@ -38,13 +38,21 @@ def ensure_indexes() -> None:
         db.users.drop_index("email_1")
     except Exception:
         pass
-    db.users.create_index([("email", ASCENDING)], unique=True, sparse=True, name="email_unique_sparse")
+    try:
+        db.users.drop_index("email_unique_sparse")
+    except Exception:
+        pass
+    try:
+        db.users.drop_index("role_1_status_1_created_at_-1")
+    except Exception:
+        pass
     db.users.create_index([("phone", ASCENDING)], unique=True, sparse=True, name="phone_unique_sparse")
-    db.users.create_index([("role", ASCENDING), ("status", ASCENDING), ("created_at", DESCENDING)])
+    db.users.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
+    db.admins.create_index([("email", ASCENDING)], unique=True, name="admin_email_unique")
+    db.admins.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
     db.drivers.create_index([("driver_id", ASCENDING)], unique=True)
     db.drivers.create_index([("phone", ASCENDING)], unique=True, sparse=True, name="driver_phone_unique_sparse")
     db.drivers.create_index([("status", ASCENDING), ("created_at", DESCENDING)])
-    db.drivers.update_many({"role": {"$exists": False}}, {"$set": {"role": "driver"}})
     db.otp_codes.create_index([("expires_at", ASCENDING)], expireAfterSeconds=0)
     db.bookings.create_index([("created_at", DESCENDING)])
     db.assignments.create_index([("created_at", DESCENDING)])

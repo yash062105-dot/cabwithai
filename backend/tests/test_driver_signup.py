@@ -115,7 +115,6 @@ def test_driver_location_endpoint_persists_coordinates(monkeypatch):
 
     assert drivers.query == {
         "driver_id": "driver-test",
-        "role": "driver",
         "$or": [{"status": "active"}, {"status": {"$exists": False}}],
     }
     assert drivers.update["$set"]["latitude"] == 26.9124

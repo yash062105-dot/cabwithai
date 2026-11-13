@@ -10,8 +10,10 @@ interface RideContextType {
   setBooking: (booking: Record<string, any>) => Ride;
   refreshRides: () => Promise<void>;
   refreshBooking: (bookingId: string) => Promise<void>;
+  updateRideStatus: (bookingId: string, status: 'requested' | 'accepted' | 'in_progress' | 'completed' | 'cancelled') => void;
+  updateDriverLocation: (bookingId: string, coordinates: {latitude: number; longitude: number}) => void;
   finishCurrentRide: () => void;
-  cancelCurrentRide: () => Promise<void>;
+  cancelCurrentRide: () => Promise<boolean>;
 }
 
 const RideContext = createContext<RideContextType | undefined>(undefined);
@@ -91,6 +93,25 @@ export const RideProvider = ({children}: {children: ReactNode}) => {
     }
   }, [mapBooking]);
 
+  const updateRideStatus = useCallback((bookingId: string, status: 'requested' | 'accepted' | 'in_progress' | 'completed' | 'cancelled') => {
+    const statusMap: Record<typeof status, RideStatus> = {
+      requested: 'searching',
+      accepted: 'assigned',
+      in_progress: 'in_progress',
+      completed: 'completed',
+      cancelled: 'cancelled',
+    };
+    setCurrentRide(previous =>
+      previous?.id === bookingId ? {...previous, status: statusMap[status]} : previous,
+    );
+  }, []);
+
+  const updateDriverLocation = useCallback((bookingId: string, coordinates: {latitude: number; longitude: number}) => {
+    setCurrentRide(previous =>
+      previous?.id === bookingId ? {...previous, driverLocation: coordinates} : previous,
+    );
+  }, []);
+
   const finishCurrentRide = () => {
     if (!currentRide) return;
     setRidesHistory(previous => [currentRide, ...previous.filter(item => item.id !== currentRide.id)]);
@@ -106,15 +127,17 @@ export const RideProvider = ({children}: {children: ReactNode}) => {
     }
   }, [isLoggedIn, role, refreshRides]);
 
-  const cancelCurrentRide = async () => {
-    if (!currentRide) return;
+  const cancelCurrentRide = async (): Promise<boolean> => {
+    if (!currentRide) return false;
     try {
       await Api.post(`/bookings/${currentRide.id}/cancel`);
       const cancelledRide = {...currentRide, status: 'cancelled' as const};
       setRidesHistory(previous => [cancelledRide, ...previous.filter(item => item.id !== currentRide.id)]);
       setCurrentRide(null);
+      return true;
     } catch (error: any) {
       Alert.alert('Could not cancel ride', error.response?.data?.detail || 'Try again shortly.');
+      return false;
     }
   };
 
@@ -126,6 +149,8 @@ export const RideProvider = ({children}: {children: ReactNode}) => {
         setBooking,
         refreshRides,
         refreshBooking,
+        updateRideStatus,
+        updateDriverLocation,
         finishCurrentRide,
         cancelCurrentRide,
       }}>

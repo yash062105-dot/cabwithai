@@ -26,7 +26,14 @@ def normalize_phone(phone: str) -> str:
 
 
 def public_user(user: dict) -> dict:
-    result = {"id": str(user["_id"]), "name": user.get("name", ""), "phone": user.get("phone"), "role": user.get("role", "user"), "status": user.get("status", "active")}
+    role = user.get("role", "admin" if user.get("email") and not user.get("phone") else "user")
+    result = {
+        "id": str(user["_id"]),
+        "name": user.get("name", ""),
+        "phone": user.get("phone"),
+        "role": role,
+        "status": user.get("status", "active"),
+    }
     if user.get("email"):
         result["email"] = user["email"]
     return result
@@ -38,9 +45,15 @@ def service_error(error: Exception) -> HTTPException:
     return HTTPException(status_code=503, detail=str(error))
 
 
-def issue_user_token(user: dict) -> TokenResponse:
+def issue_user_token(user: dict, role: str = "user") -> TokenResponse:
     identifier = user.get("phone") or user.get("email", "")
-    return TokenResponse(access_token=create_token(str(user["_id"]), identifier, user.get("role", "user")), user=public_user(user))
+    actual_role = user.get("role") or role
+    user_with_role = dict(user)
+    user_with_role["role"] = actual_role
+    return TokenResponse(
+        access_token=create_token(str(user["_id"]), identifier, actual_role),
+        user=public_user(user_with_role),
+    )
 
 
 def save_otp(phone: str, purpose: str) -> str | None:
@@ -72,7 +85,7 @@ def request_otp(request: PhoneOtpRequest) -> MessageResponse:
     try:
         db = get_database()
         user = db.users.find_one({"phone": phone})
-        driver = db.drivers.find_one({"phone": phone, "role": "driver"}) if request.purpose == "login" else None
+        driver = db.drivers.find_one({"phone": phone}) if request.purpose == "login" else None
         if request.purpose == "login" and not user and not driver:
             return MessageResponse(message="If the account exists, an OTP has been sent")
         if request.purpose == "reset" and not user:
@@ -94,7 +107,7 @@ def signup(request: SignupRequest) -> TokenResponse:
     phone = normalize_phone(request.phone)
     try:
         consume_otp(phone, request.otp, "signup")
-        user = {"name": request.name.strip(), "phone": phone, "role": "user", "status": "active", "created_at": datetime.now(timezone.utc)}
+        user = {"name": request.name.strip(), "phone": phone, "status": "active", "created_at": datetime.now(timezone.utc)}
         result = get_database().users.insert_one(user)
     except DuplicateKeyError as exc:
         raise HTTPException(status_code=409, detail="An account with this phone already exists") from exc
@@ -103,7 +116,7 @@ def signup(request: SignupRequest) -> TokenResponse:
     except Exception as exc:
         raise service_error(exc) from exc
     user["_id"] = result.inserted_id
-    return issue_user_token(user)
+    return issue_user_token(user, role="user")
 
 
 @router.post("/driver-signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -118,7 +131,6 @@ def driver_signup(request: DriverSignupRequest) -> TokenResponse:
             "driver_id": uuid4().hex,
             "name": request.name.strip(),
             "phone": phone,
-            "role": "driver",
             "status": "inactive",
             "latitude": request.latitude,
             "longitude": request.longitude,
@@ -150,52 +162,64 @@ def driver_signup(request: DriverSignupRequest) -> TokenResponse:
 @router.post("/login", response_model=TokenResponse)
 def login(request: LoginRequest) -> TokenResponse:
     try:
-        if request.phone and request.otp:
-            phone = normalize_phone(request.phone)
-            consume_otp(phone, request.otp, "login")
+        phone = normalize_phone(request.phone)
+        consume_otp(phone, request.otp, "login")
+
+        # If user explicitly requested driver login
+        if request.role == "driver":
+            driver = get_database().drivers.find_one({"phone": phone})
+            if not driver:
+                raise HTTPException(status_code=401, detail="No driver account found for this phone number")
+            token = create_driver_token(driver["driver_id"], driver["name"])
+            return TokenResponse(
+                access_token=token,
+                user={"id": driver["driver_id"], "name": driver["name"], "phone": phone, "role": "driver", "status": driver.get("status", "active")},
+                driver_access_token=token,
+            )
+
+        # If user explicitly requested user login
+        if request.role == "user":
             user = get_database().users.find_one({"phone": phone})
             if not user:
-                driver = get_database().drivers.find_one({"phone": phone, "role": "driver"})
-                if driver:
-                    token = create_driver_token(driver["driver_id"], driver["name"])
-                    return TokenResponse(
-                        access_token=token,
-                        user={"id": driver["driver_id"], "name": driver["name"], "phone": phone, "role": "driver", "status": driver.get("status", "active")},
-                        driver_access_token=token,
-                    )
-            if not user:
-                raise HTTPException(status_code=401, detail="No account found for this phone number")
-            if user.get("role") == "driver":
-                raise HTTPException(status_code=403, detail="Drivers do not use user login")
-        else:
-            email = request.email.strip().lower()
-            user = get_database().users.find_one({"email": email})
-            valid = bool(user) and user.get("role") == "admin" and verify_password(request.password or "", user.get("password_hash", ""))
-            if not valid:
-                raise HTTPException(status_code=401, detail="Invalid admin credentials")
+                raise HTTPException(status_code=401, detail="No user account found for this phone number")
+            return issue_user_token(user, role="user")
+
+        # Fallback if role is not explicitly provided: check users first, then drivers
+        user = get_database().users.find_one({"phone": phone})
+        if not user:
+            driver = get_database().drivers.find_one({"phone": phone})
+            if driver:
+                token = create_driver_token(driver["driver_id"], driver["name"])
+                return TokenResponse(
+                    access_token=token,
+                    user={"id": driver["driver_id"], "name": driver["name"], "phone": phone, "role": "driver", "status": driver.get("status", "active")},
+                    driver_access_token=token,
+                )
+        if not user:
+            raise HTTPException(status_code=401, detail="No account found for this phone number")
     except HTTPException:
         raise
     except (TypeError, ValueError):
-        raise HTTPException(status_code=401, detail="Invalid admin credentials")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
     except Exception as exc:
         raise service_error(exc) from exc
-    return issue_user_token(user)
+    return issue_user_token(user, role="user")
 
 
 @router.post("/admin-login", response_model=TokenResponse, summary="Fast admin email/password login")
 def admin_login(request: AdminLoginRequest) -> TokenResponse:
     try:
         email = request.email.strip().lower()
-        user = get_database().users.find_one({"email": email, "role": "admin"})
-        valid = bool(user) and verify_password(request.password, user.get("password_hash", ""))
+        admin = get_database().admins.find_one({"email": email})
+        valid = bool(admin) and verify_password(request.password, admin.get("password_hash", ""))
     except (TypeError, ValueError):
         valid = False
-        user = None
+        admin = None
     except Exception as exc:
         raise service_error(exc) from exc
-    if not valid or not user:
+    if not valid or not admin:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
-    return issue_user_token(user)
+    return issue_user_token(admin, role="admin")
 
 
 @router.post("/forgot-password", response_model=MessageResponse)
@@ -219,6 +243,14 @@ def current_user(
             "name": account.get("name", ""),
             "phone": account.get("phone"),
             "role": "driver",
+            "status": account.get("status", "active"),
+        }
+    if account.get("role") == "admin":
+        return {
+            "id": str(account["_id"]),
+            "name": account.get("name", ""),
+            "email": account.get("email"),
+            "role": "admin",
             "status": account.get("status", "active"),
         }
     return public_user(account)

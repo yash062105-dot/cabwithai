@@ -23,10 +23,9 @@ RIDE_STATUSES = {"requested", "accepted", "in_progress", "completed", "cancelled
 
 
 def _account_query(role: str) -> dict:
-    query = {"role": role}
     if role == "user":
-        query = {"$or": [{"role": "user"}, {"role": {"$exists": False}}]}
-    return query
+        return {"$or": [{"role": "user"}, {"role": {"$exists": False}}]}
+    return {"role": role}
 
 
 def _date_query(created_from: datetime | None, created_to: datetime | None) -> dict:
@@ -70,7 +69,7 @@ def _list_query(
     search_fields: tuple[str, ...],
 ) -> dict:
     clauses = []
-    if role:
+    if role and role not in {"user", "driver"}:
         clauses.append(_account_query(role))
     if status:
         clauses.append({"status": status})
@@ -135,7 +134,6 @@ def dashboard() -> dict:
         drivers = db.drivers
         bookings = db.bookings
         active_driver = {
-            "role": "driver",
             "online": True,
             "$or": [
                 {"status": "active"},
@@ -143,10 +141,7 @@ def dashboard() -> dict:
             ],
         }
         active_user = {
-            "$and": [
-                _account_query("user"),
-                {"$or": [{"status": "active"}, {"status": {"$exists": False}}]},
-            ]
+            "$or": [{"status": "active"}, {"status": {"$exists": False}}],
         }
         now = datetime.now(timezone.utc)
         today = datetime.combine(now.date(), time.min, tzinfo=timezone.utc)
@@ -197,33 +192,21 @@ def dashboard() -> dict:
         )
         return {
             "users": {
-                "total": users.count_documents(_account_query("user")),
+                "total": users.count_documents({}),
                 "active": users.count_documents(active_user),
-                "inactive": users.count_documents(
-                    {"$and": [_account_query("user"), {"status": "inactive"}]}
-                ),
-                "blocked": users.count_documents(
-                    {"$and": [_account_query("user"), {"status": "blocked"}]}
-                ),
+                "inactive": users.count_documents({"status": "inactive"}),
+                "blocked": users.count_documents({"status": "blocked"}),
             },
             "drivers": {
-                "total": drivers.count_documents({"role": "driver"}),
-                "active": drivers.count_documents(
-                    {"role": "driver", "status": "active"}
-                )
-                + drivers.count_documents(
-                    {"role": "driver", "status": {"$exists": False}}
-                ),
-                "inactive": drivers.count_documents(
-                    {"role": "driver", "status": "inactive"}
-                ),
-                "blocked": drivers.count_documents(
-                    {"role": "driver", "status": "blocked"}
-                ),
+                "total": drivers.count_documents({}),
+                "active": drivers.count_documents({"status": "active"})
+                + drivers.count_documents({"status": {"$exists": False}}),
+                "inactive": drivers.count_documents({"status": "inactive"}),
+                "blocked": drivers.count_documents({"status": "blocked"}),
             },
             "cabs": {
                 "total": drivers.count_documents(
-                    {"role": "driver", "vehicle_type": {"$exists": True, "$ne": None}}
+                    {"vehicle_type": {"$exists": True, "$ne": None}}
                 ),
                 "live": drivers.count_documents(active_driver),
             },
@@ -284,7 +267,7 @@ def page_users(
 def user_details(user_id: str) -> dict:
     try:
         db = get_database()
-        user = db.users.find_one({"_id": object_id(user_id), "$or": [{"role": "user"}, {"role": {"$exists": False}}]}, {"password_hash": 0})
+        user = db.users.find_one({"_id": object_id(user_id)}, {"password_hash": 0})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
         bookings = list(db.bookings.find({"user_id": user_id}).sort("created_at", DESCENDING).limit(50))
@@ -317,7 +300,7 @@ def change_user_status(
     try:
         return _set_status(
             get_database().users,
-            {"_id": object_id(user_id), "$or": [{"role": "user"}, {"role": {"$exists": False}}]},
+            {"_id": object_id(user_id)},
             request.status,
             admin,
             "user",
@@ -372,7 +355,7 @@ def page_drivers(
 def driver_details(driver_id: str) -> dict:
     try:
         db = get_database()
-        driver = db.drivers.find_one({"driver_id": driver_id, "role": "driver"})
+        driver = db.drivers.find_one({"driver_id": driver_id})
         if not driver:
             raise HTTPException(status_code=404, detail="Driver not found")
         bookings = list(db.bookings.find({"driver_id": driver_id}).sort("created_at", DESCENDING).limit(50))
@@ -405,7 +388,7 @@ def change_driver_status(
     try:
         return _set_status(
             get_database().drivers,
-            {"driver_id": driver_id, "role": "driver"},
+            {"driver_id": driver_id},
             request.status,
             admin,
             "driver",
@@ -521,7 +504,6 @@ def live_monitoring(
     try:
         db = get_database()
         query = {
-            "role": "driver",
             "online": True,
             "$or": [{"status": "active"}, {"status": {"$exists": False}}],
         }

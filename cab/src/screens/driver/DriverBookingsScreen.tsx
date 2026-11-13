@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {useCallback, useState} from 'react';
 import {
   View,
   Text,
@@ -7,11 +7,15 @@ import {
   ScrollView,
   StatusBar,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
 
 import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import Api from '../../config/Api';
 import {Badge, EmptyState, ScreenHeader} from '../../components';
+import {connectDriverSocket} from '../../services/driverSocket';
+import type {Socket} from 'socket.io-client';
 
 interface DriverBookingsScreenProps {
   navigation: any;
@@ -20,17 +24,49 @@ interface DriverBookingsScreenProps {
 const DriverBookingsScreen = ({navigation}: DriverBookingsScreenProps) => {
   const [activeTab, setActiveTab] = useState<'incoming' | 'past'>('incoming');
   const [bookings, setBookings] = useState<Record<string, any>[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Api.get('/driver/bookings')
-      .then(response => setBookings(response.data))
-      .catch(error =>
-        Alert.alert(
-          'Could not load bookings',
-          error.response?.data?.detail || 'Check your connection and try again.',
-        ),
+  const loadBookings = useCallback(async () => {
+    try {
+      const response = await Api.get('/driver/bookings');
+      setBookings(Array.isArray(response.data) ? response.data : []);
+    } catch (error: any) {
+      Alert.alert(
+        'Could not load bookings',
+        error.response?.data?.detail || 'Check your connection and try again.',
       );
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      let socket: Socket | null = null;
+      setLoading(true);
+      loadBookings();
+
+      connectDriverSocket(message => console.warn('Bookings socket:', message))
+        .then(connection => {
+          if (!active) {
+            connection.socket.disconnect();
+            return;
+          }
+          socket = connection.socket;
+          socket.on('ride_request', loadBookings);
+          socket.on('booking_status', loadBookings);
+          socket.on('connect', loadBookings);
+          loadBookings();
+        })
+        .catch(error => console.warn('Could not connect to bookings socket:', error));
+
+      return () => {
+        active = false;
+        socket?.disconnect();
+      };
+    }, [loadBookings]),
+  );
 
   const incomingList = bookings.filter(
     b => b.status === 'requested' || b.status === 'accepted' || b.status === 'in_progress',
@@ -77,7 +113,12 @@ const DriverBookingsScreen = ({navigation}: DriverBookingsScreenProps) => {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}>
-        {displayedList.length === 0 ? (
+        {loading ? (
+          <View style={styles.loadingState}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.loadingText}>Loading bookings...</Text>
+          </View>
+        ) : displayedList.length === 0 ? (
           <EmptyState
             icon={activeTab === 'incoming' ? '🚖' : '📋'}
             title={activeTab === 'incoming' ? 'No active bookings' : 'No trip history'}
@@ -113,7 +154,7 @@ const DriverBookingsScreen = ({navigation}: DriverBookingsScreenProps) => {
 
                 <View style={styles.riderRow}>
                   <Text style={styles.riderAvatar}>👤</Text>
-                  <Text style={styles.riderName}>{booking.user?.name || 'Customer'}</Text>
+                  <Text style={styles.riderName}>{booking.rider_name || booking.user?.name || 'Customer'}</Text>
                 </View>
 
                 <View style={styles.divider} />
@@ -122,7 +163,7 @@ const DriverBookingsScreen = ({navigation}: DriverBookingsScreenProps) => {
                   <View style={styles.routeItem}>
                     <View style={styles.pickupDot} />
                     <Text style={styles.routeText} numberOfLines={1}>
-                      {booking.pickup}
+                      {booking.pickup_address || booking.pickup || `${booking.pickup_lat ?? ''}, ${booking.pickup_lon ?? ''}`}
                     </Text>
                   </View>
 
@@ -131,7 +172,7 @@ const DriverBookingsScreen = ({navigation}: DriverBookingsScreenProps) => {
                   <View style={styles.routeItem}>
                     <View style={styles.dropSquare} />
                     <Text style={styles.routeText} numberOfLines={1}>
-                      {booking.destination}
+                      {booking.destination_address || booking.destination || `${booking.destination_lat ?? ''}, ${booking.destination_lon ?? ''}`}
                     </Text>
                   </View>
                 </View>
@@ -142,7 +183,9 @@ const DriverBookingsScreen = ({navigation}: DriverBookingsScreenProps) => {
                   <Text style={styles.dateText}>
                     {new Date(booking.created_at).toLocaleDateString()}
                   </Text>
-                  <Text style={styles.fareAmount}>₹{booking.fare}</Text>
+                  <Text style={styles.fareAmount}>
+                    ₹{booking.fare_amount ?? booking.estimated_fare ?? booking.fare ?? 0}
+                  </Text>
                 </View>
               </TouchableOpacity>
             );
@@ -191,6 +234,18 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: spacing.xl,
     paddingBottom: 40,
+  },
+  loadingState: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 28,
+  },
+  loadingText: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    fontFamily: fonts.medium,
   },
   card: {
     backgroundColor: colors.white,

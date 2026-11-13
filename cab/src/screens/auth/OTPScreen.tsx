@@ -80,7 +80,11 @@ const OTPScreen = ({navigation, route}: OTPScreenProps) => {
               otp: enteredOtp,
             });
       } else {
-        response = await Api.post('/auth/login', {phone, otp: enteredOtp});
+        response = await Api.post('/auth/login', {
+          phone,
+          otp: enteredOtp,
+          role: route?.params?.role,
+        });
       }
       await signIn(response.data.access_token, response.data.user);
     } catch (error: any) {

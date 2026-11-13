@@ -63,15 +63,12 @@ const DriverDocumentsScreen = ({
         role: 'driver',
         devOtp: response.data.dev_otp,
         driverRegistration: {
+          latitude: 26.9124,
+          longitude: 75.7873,
           vehicle_type: vehicleType,
           vehicle_model: vehicleModel,
           vehicle_number: vehicleNumber,
           license_number: licenseNumber,
-          documents: {
-            rc_uploaded: rcUploaded,
-            dl_uploaded: dlUploaded,
-            insurance_uploaded: insuranceUploaded,
-          },
         },
       });
     } catch (error: any) {

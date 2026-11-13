@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  TextInput,
   ScrollView,
   StatusBar,
   Alert,
@@ -14,6 +13,25 @@ import {colors, fonts, radii, spacing, shadows} from '../../theme';
 import Api from '../../config/Api';
 import LiveMap from '../../components/LiveMap';
 import {Button, ScreenHeader} from '../../components';
+import {connectDriverSocket} from '../../services/driverSocket';
+import {watchLocation} from '../../services/location';
+import type {Socket} from 'socket.io-client';
+
+const getApiErrorMessage = (error: any, fallback: string): string => {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map(item => {
+        const location = Array.isArray(item?.loc) ? item.loc.slice(1).join('.') : '';
+        const message = typeof item?.msg === 'string' ? item.msg : '';
+        return [location, message].filter(Boolean).join(': ');
+      })
+      .filter(Boolean)
+      .join('\n') || fallback;
+  }
+  return fallback;
+};
 
 interface DriverRideScreenProps {
   navigation: any;
@@ -23,39 +41,61 @@ interface DriverRideScreenProps {
 const DriverRideScreen = ({navigation, route}: DriverRideScreenProps) => {
   const bookingId = route?.params?.bookingId;
   const [booking, setBooking] = useState<Record<string, any> | null>(null);
-  const [enteredOtp, setEnteredOtp] = useState('');
-  const [otpError, setOtpError] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const loadBooking = async () => {
     if (!bookingId) return;
     try {
-      const response = await Api.get(`/bookings/${bookingId}`);
+      const response = await Api.get(`/driver/bookings/${bookingId}`);
       setBooking(response.data);
     } catch (error: any) {
-      Alert.alert('Could not load booking', error.response?.data?.detail || 'Check your connection and try again.');
+      Alert.alert('Could not load booking', getApiErrorMessage(error, 'Check your connection and try again.'));
     }
   };
 
   useEffect(() => {
+    let active = true;
+    let socket: Socket | null = null;
+    let sendLocation: ((coordinates: {latitude: number; longitude: number}) => void) | null = null;
+    let latestCoordinates: {latitude: number; longitude: number} | null = null;
+
     loadBooking();
-    const timer = setInterval(loadBooking, 5000);
-    return () => clearInterval(timer);
+    const stopWatching = watchLocation(coordinates => {
+      latestCoordinates = coordinates;
+      sendLocation?.(coordinates);
+    });
+    connectDriverSocket(message => console.warn('Driver trip socket:', message))
+      .then(connection => {
+        if (!active) {
+          connection.socket.disconnect();
+          return;
+        }
+        socket = connection.socket;
+        sendLocation = connection.sendLocation;
+        socket.on('booking_status', (update: {booking_id: string}) => {
+          if (update.booking_id === bookingId) loadBooking();
+        });
+        socket.on('connect', loadBooking);
+        loadBooking();
+        if (latestCoordinates) connection.sendLocation(latestCoordinates);
+      })
+      .catch(error => console.warn('Could not connect to driver trip socket:', error));
+
+    return () => {
+      active = false;
+      stopWatching();
+      socket?.disconnect();
+      sendLocation = null;
+    };
   }, [bookingId]);
 
   const handleStartTrip = async () => {
-    if (enteredOtp.length !== 4) {
-      setOtpError(true);
-      return;
-    }
-    setOtpError(false);
     setLoading(true);
     try {
-      await Api.post(`/driver/bookings/${bookingId}/start`, {otp: enteredOtp});
+      await Api.post(`/driver/bookings/${bookingId}/start`);
       loadBooking();
     } catch (error: any) {
-      setOtpError(true);
-      Alert.alert('Start trip failed', error.response?.data?.detail || 'Enter the correct 4-digit customer OTP.');
+      Alert.alert('Start trip failed', getApiErrorMessage(error, 'Try again shortly.'));
     } finally {
       setLoading(false);
     }
@@ -64,10 +104,10 @@ const DriverRideScreen = ({navigation, route}: DriverRideScreenProps) => {
   const handleCompleteTrip = async () => {
     setLoading(true);
     try {
-      await Api.post(`/driver/bookings/${bookingId}/complete`);
+      await Api.post(`/driver/bookings/${bookingId}/complete`, {});
       loadBooking();
     } catch (error: any) {
-      Alert.alert('Complete trip failed', error.response?.data?.detail || 'Try again shortly.');
+      Alert.alert('Complete trip failed', getApiErrorMessage(error, 'Try again shortly.'));
     } finally {
       setLoading(false);
     }
@@ -81,11 +121,11 @@ const DriverRideScreen = ({navigation, route}: DriverRideScreenProps) => {
   const isInProgress = booking?.status === 'in_progress';
   const isCompleted = booking?.status === 'completed';
 
-  const pickupCoords = booking?.pickup_latitude && booking?.pickup_longitude
-    ? {latitude: booking.pickup_latitude, longitude: booking.pickup_longitude, label: booking.pickup}
+  const pickupCoords = booking?.pickup_lat != null && booking?.pickup_lon != null
+    ? {latitude: booking.pickup_lat, longitude: booking.pickup_lon, label: booking.pickup_address}
     : null;
-  const destCoords = booking?.destination_latitude && booking?.destination_longitude
-    ? {latitude: booking.destination_latitude, longitude: booking.destination_longitude, label: booking.destination}
+  const destCoords = booking?.destination_lat != null && booking?.destination_lon != null
+    ? {latitude: booking.destination_lat, longitude: booking.destination_lon, label: booking.destination_address}
     : null;
 
   return (
@@ -128,7 +168,7 @@ const DriverRideScreen = ({navigation, route}: DriverRideScreenProps) => {
             </View>
 
             <View style={styles.customerMeta}>
-              <Text style={styles.customerName}>{booking?.user?.name || 'Rider'}</Text>
+              <Text style={styles.customerName}>{booking?.rider_name || booking?.user?.name || 'Rider'}</Text>
               <Text style={styles.customerRating}>★ 5.0 • Cash Payment</Text>
             </View>
 
@@ -150,7 +190,7 @@ const DriverRideScreen = ({navigation, route}: DriverRideScreenProps) => {
               <View style={styles.pickupDot} />
               <View style={styles.routeTextContainer}>
                 <Text style={styles.routeLabel}>PICKUP</Text>
-                <Text style={styles.routeText} numberOfLines={1}>{booking?.pickup}</Text>
+                <Text style={styles.routeText} numberOfLines={1}>{booking?.pickup_address || booking?.pickup}</Text>
               </View>
             </View>
 
@@ -160,42 +200,17 @@ const DriverRideScreen = ({navigation, route}: DriverRideScreenProps) => {
               <View style={styles.dropSquare} />
               <View style={styles.routeTextContainer}>
                 <Text style={styles.routeLabel}>DROP</Text>
-                <Text style={styles.routeText} numberOfLines={1}>{booking?.destination}</Text>
+                <Text style={styles.routeText} numberOfLines={1}>{booking?.destination_address || booking?.destination}</Text>
               </View>
             </View>
           </View>
         </View>
 
-        {/* OTP Verification Box for Pickup */}
-        {isAccepted && (
-          <View style={styles.otpBox}>
-            <Text style={styles.otpTitle}>Customer Verification Code</Text>
-            <Text style={styles.otpHint}>
-              Ask customer for their 4-digit ride OTP to start trip
-            </Text>
-            <TextInput
-              style={[styles.otpInput, otpError && styles.otpInputError]}
-              placeholder="••••"
-              placeholderTextColor={colors.textMuted}
-              keyboardType="number-pad"
-              maxLength={4}
-              value={enteredOtp}
-              onChangeText={text => {
-                setEnteredOtp(text);
-                setOtpError(false);
-              }}
-            />
-            {otpError && (
-              <Text style={styles.errorText}>Invalid code. Check with customer.</Text>
-            )}
-          </View>
-        )}
-
         {/* Fare Summary for Completed Ride */}
         {isCompleted && (
           <View style={styles.fareCard}>
             <Text style={styles.fareTitle}>CASH FARE TO COLLECT</Text>
-            <Text style={styles.fareAmount}>₹{booking?.fare || '0'}</Text>
+            <Text style={styles.fareAmount}>₹{booking?.fare_amount ?? booking?.estimated_fare ?? booking?.fare ?? '0'}</Text>
             <Text style={styles.paymentType}>💵 Collect Cash from Customer</Text>
           </View>
         )}
@@ -204,7 +219,7 @@ const DriverRideScreen = ({navigation, route}: DriverRideScreenProps) => {
         <View style={styles.actionSection}>
           {isAccepted && (
             <Button
-              title="Verify OTP & Start Trip"
+              title="Start Trip"
               size="lg"
               loading={loading}
               onPress={handleStartTrip}
@@ -373,52 +388,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: fonts.medium,
     marginTop: 1,
-  },
-  otpBox: {
-    backgroundColor: colors.white,
-    borderRadius: radii.xl,
-    padding: 18,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    alignItems: 'center',
-    marginBottom: 16,
-    ...shadows.sm,
-  },
-  otpTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontFamily: fonts.bold,
-    fontWeight: '700',
-  },
-  otpHint: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: fonts.regular,
-    marginTop: 3,
-    marginBottom: 14,
-    textAlign: 'center',
-  },
-  otpInput: {
-    width: 160,
-    height: 50,
-    borderWidth: 1.5,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    textAlign: 'center',
-    fontSize: 22,
-    fontFamily: fonts.bold,
-    color: colors.text,
-    backgroundColor: colors.surfaceSubtle,
-    letterSpacing: 8,
-  },
-  otpInputError: {
-    borderColor: colors.danger,
-  },
-  errorText: {
-    color: colors.danger,
-    fontSize: 12,
-    marginTop: 6,
-    fontFamily: fonts.medium,
   },
   fareCard: {
     backgroundColor: colors.primary,

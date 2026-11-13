@@ -79,7 +79,7 @@ android {
 
     namespace "com.cab"
     defaultConfig {
-        applicationId "com.cab"
+        applicationId "com.cab.clone"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

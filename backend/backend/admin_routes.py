@@ -44,7 +44,7 @@ def list_users(limit: int = Query(default=100, ge=1, le=200)) -> list[dict]:
 
 @router.post("/users", status_code=status.HTTP_201_CREATED)
 def create_user(request: AdminUserCreateRequest) -> dict:
-    user = {"name": request.name.strip(), "phone": request.phone, "role": request.role, "status": "active", "created_at": datetime.now(timezone.utc)}
+    user = {"name": request.name.strip(), "phone": request.phone, "status": "active", "created_at": datetime.now(timezone.utc)}
     try:
         result = get_database().users.insert_one(user)
     except DuplicateKeyError as exc:
@@ -58,8 +58,6 @@ def create_user(request: AdminUserCreateRequest) -> dict:
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str, admin: dict = Depends(require_admin)) -> dict:
     try:
-        if object_id(user_id) == admin["_id"]:
-            raise HTTPException(status_code=400, detail="You cannot delete your own admin account")
         db = get_database()
         result = db.users.delete_one({"_id": object_id(user_id)})
     except HTTPException:
@@ -90,7 +88,7 @@ def list_drivers(limit: int = Query(default=100, ge=1, le=200)) -> list[dict]:
 
 @router.post("/drivers", status_code=status.HTTP_201_CREATED)
 def create_driver(request: DriverCreateRequest) -> dict:
-    driver = {**request.model_dump(), "status": "inactive", "available": False, "online": False, "role": "driver", "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
+    driver = {**request.model_dump(), "status": "inactive", "available": False, "online": False, "created_at": datetime.now(timezone.utc), "updated_at": datetime.now(timezone.utc)}
     try:
         get_database().drivers.insert_one(driver)
     except DuplicateKeyError as exc:
@@ -105,7 +103,7 @@ def create_driver(request: DriverCreateRequest) -> dict:
 @router.post("/drivers/{driver_id}/token")
 def create_driver_access_token(driver_id: str) -> dict:
     try:
-        driver = get_database().drivers.find_one({"driver_id": driver_id, "role": "driver"})
+        driver = get_database().drivers.find_one({"driver_id": driver_id})
     except Exception as exc:
         raise db_error(exc) from exc
     if not driver:
@@ -163,7 +161,7 @@ def analysis() -> dict:
         db = get_database()
         return {
             "users": db.users.count_documents({}),
-            "admins": db.users.count_documents({"role": "admin"}),
+            "admins": db.admins.count_documents({}),
             "drivers": db.drivers.count_documents({}),
             "available_drivers": db.drivers.count_documents({"available": True}),
             "bookings": db.bookings.count_documents({}),

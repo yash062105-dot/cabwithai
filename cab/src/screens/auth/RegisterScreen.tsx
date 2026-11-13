@@ -34,17 +34,27 @@ const RegisterScreen = ({navigation}: RegisterScreenProps) => {
       Alert.alert('Check your details', 'Enter your full name and a valid 10-digit mobile number.');
       return;
     }
+
+    const normalizedPhone = `+91${rawDigits}`;
+
+    // If registering as a driver, move to vehicle details step directly
+    if (role === 'driver') {
+      navigation.navigate('DriverDetails', {
+        phone: normalizedPhone,
+        name: name.trim(),
+      });
+      return;
+    }
+
     setLoading(true);
     try {
-      const normalizedPhone = `+91${rawDigits}`;
       const response = await Api.post('/auth/request-otp', {phone: normalizedPhone, purpose: 'signup'});
       navigation.navigate('OTP', {
         phone: normalizedPhone,
         name: name.trim(),
         flow: 'register',
-        role,
+        role: 'user',
         devOtp: response.data.dev_otp,
-        ...(role === 'driver' ? {registrationStep: 'driver-details'} : {}),
       });
     } catch (error: any) {
       Alert.alert('Could not start registration', error.response?.data?.detail || 'Check that the backend is running and try again.');

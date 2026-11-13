@@ -47,6 +47,22 @@ const distanceKm = (
   return 6371 * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
 };
 
+const getErrorMessage = (error: any, fallback: string): string => {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map(item => {
+        const location = Array.isArray(item?.loc) ? item.loc.slice(1).join('.') : '';
+        const message = typeof item?.msg === 'string' ? item.msg : '';
+        return [location, message].filter(Boolean).join(': ');
+      })
+      .filter(Boolean)
+      .join('\n') || fallback;
+  }
+  return fallback;
+};
+
 const BookRideScreen = ({ navigation, route }: BookRideScreenProps) => {
   const { setBooking } = useRide();
   const { currentLocation, refreshLocation } = useLocation();
@@ -182,43 +198,23 @@ const BookRideScreen = ({ navigation, route }: BookRideScreenProps) => {
     setSubmitting(true);
     try {
       const response = await Api.post('/bookings', {
-        pickup,
-        destination,
+        pickup_address: pickup,
+        destination_address: destination,
         cab_type: selectedCabType,
-        pickup_latitude: Number(pickupLat),
-        pickup_longitude: Number(pickupLon),
-        destination_latitude: Number(destinationLat),
-        destination_longitude: Number(destinationLon),
+        pickup_lat: Number(pickupLat),
+        pickup_lon: Number(pickupLon),
+        destination_lat: Number(destinationLat),
+        destination_lon: Number(destinationLon),
         payment_method: paymentMethod,
       });
 
-      setBooking({
-        id: response.data._id,
-        pickup,
-        destination,
-        cabType: selectedCabType,
-        fare: response.data.fare,
-        status: response.data.status,
-        date: new Date(response.data.created_at).toLocaleDateString(),
-        time: new Date(response.data.created_at).toLocaleTimeString([], {
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        pickupCoordinates: {
-          latitude: Number(pickupLat),
-          longitude: Number(pickupLon),
-        },
-        destinationCoordinates: {
-          latitude: Number(destinationLat),
-          longitude: Number(destinationLon),
-        },
-      });
+      setBooking(response.data);
 
       navigation.replace('RideTracking', { rideId: response.data._id });
     } catch (error: any) {
       Alert.alert(
         'Booking Failed',
-        error.response?.data?.detail || 'Could not schedule ride. Please try again.',
+        getErrorMessage(error, 'Could not schedule ride. Please try again.'),
       );
     } finally {
       setSubmitting(false);

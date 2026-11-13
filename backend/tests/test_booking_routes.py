@@ -8,7 +8,6 @@ def test_cab_options_are_limited_to_available_driver_types(monkeypatch):
         def find(self, query):
             assert query == {
                 "available": True,
-                "role": "driver",
                 "$or": [{"status": "active"}, {"status": {"$exists": False}}],
             }
             return [
@@ -68,3 +67,79 @@ def test_driver_transactions_only_returns_ride_earnings(monkeypatch):
     result = driver_transactions({"driver_id": "driver-1"})
 
     assert result == [records[1]]
+
+
+def test_driver_booking_details_require_the_assigned_driver(monkeypatch):
+    from backend.booking_routes import get_driver_booking
+
+    booking = {"_id": "booking-1", "driver_id": "driver-1", "status": "accepted"}
+    calls = []
+
+    def find_booking(booking_id, user=None, driver=None):
+        calls.append((booking_id, user, driver))
+        assert driver == {"driver_id": "driver-1"}
+        return booking.copy()
+
+    class Drivers:
+        def find_one(self, query, projection):
+            assert query == {"driver_id": "driver-1"}
+            assert projection["latitude"] == 1
+            return {"latitude": 12.5, "longitude": 77.5}
+
+    monkeypatch.setattr("backend.booking_routes.booking_for_user_or_driver", find_booking)
+    monkeypatch.setattr(
+        "backend.booking_routes.get_database",
+        lambda: SimpleNamespace(drivers=Drivers()),
+    )
+
+    result = get_driver_booking("booking-1", {"driver_id": "driver-1"})
+
+    assert calls == [("booking-1", None, {"driver_id": "driver-1"})]
+    assert result["driver_location"] == {"latitude": 12.5, "longitude": 77.5}
+
+
+def test_driver_can_start_accepted_booking_without_otp(monkeypatch):
+    import asyncio
+
+    from backend import booking_routes
+
+    booking = {
+        "_id": "booking-1",
+        "user_id": "user-1",
+        "driver_id": "driver-1",
+        "status": "accepted",
+        "updated_at": booking_routes.now(),
+    }
+    updates = []
+
+    class Bookings:
+        def update_one(self, query, update):
+            updates.append((query, update))
+            return SimpleNamespace(modified_count=1)
+
+    class Assignments:
+        def update_one(self, query, update):
+            return SimpleNamespace(modified_count=1)
+
+    monkeypatch.setattr(
+        booking_routes,
+        "booking_for_user_or_driver",
+        lambda booking_id, user=None, driver=None: booking,
+    )
+    monkeypatch.setattr(
+        booking_routes,
+        "get_database",
+        lambda: SimpleNamespace(bookings=Bookings(), assignments=Assignments()),
+    )
+    monkeypatch.setattr(
+        booking_routes,
+        "emit_booking_status",
+        lambda *_args, **_kwargs: asyncio.sleep(0),
+    )
+
+    result = asyncio.run(
+        booking_routes.start_booking("booking-1", {"driver_id": "driver-1"})
+    )
+
+    assert result["status"] == "in_progress"
+    assert updates[0][1]["$set"]["status"] == "in_progress"

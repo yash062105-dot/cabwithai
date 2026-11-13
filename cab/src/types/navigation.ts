@@ -27,12 +27,10 @@ export type AuthStackParamList = {
   DriverDetails: {
     phone: string;
     name: string;
-    email: string;
   };
   DriverDocuments: {
     phone: string;
     name: string;
-    email: string;
     vehicleType: string;
     vehicleModel: string;
     vehicleNumber: string;

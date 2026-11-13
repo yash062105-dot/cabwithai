@@ -118,13 +118,7 @@ const UserProfileScreen = () => {
               </View>
             </View>
 
-            <View style={styles.memberBox}>
-              <UserCircle
-                size={17}
-                color={colors.primary}
-              />
-              <Text style={styles.memberText}>Member</Text>
-            </View>
+            
           </View>
         </View>
 
@@ -306,22 +300,6 @@ const styles = StyleSheet.create({
   statusText: {
     color: colors.success,
     fontSize: 12,
-    fontFamily: fonts.bold,
-  },
-
-  memberBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    borderRadius: radii.md,
-    gap: 6,
-  },
-
-  memberText: {
-    fontSize: 11,
-    color: colors.primary,
     fontFamily: fonts.bold,
   },
 

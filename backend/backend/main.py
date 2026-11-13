@@ -39,22 +39,22 @@ async def lifespan(_: FastAPI):
         close_database()
 
 
-app = FastAPI(title="AI-Driven Cab Booking API", version="1.0.0", lifespan=lifespan)
+fastapi_app = FastAPI(title="AI-Driven Cab Booking API", version="1.0.0", lifespan=lifespan)
 allowed_origins = [origin.strip() for origin in os.getenv("FRONTEND_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",") if origin.strip()]
-app.add_middleware(
+fastapi_app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
     allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
-app.include_router(auth_router)
-app.include_router(admin_router)
-app.include_router(admin_data_router)
-app.include_router(booking_router)
+fastapi_app.include_router(auth_router)
+fastapi_app.include_router(admin_router)
+fastapi_app.include_router(admin_data_router)
+fastapi_app.include_router(booking_router)
 
 
-@app.get("/", include_in_schema=False)
+@fastapi_app.get("/", include_in_schema=False)
 def root() -> dict:
     return {
         "service": "AI-Driven Cab Booking API",
@@ -64,7 +64,7 @@ def root() -> dict:
     }
 
 
-@app.get("/favicon.ico", include_in_schema=False, status_code=204)
+@fastapi_app.get("/favicon.ico", include_in_schema=False, status_code=204)
 def favicon() -> Response:
     return Response(status_code=204)
 
@@ -76,18 +76,18 @@ def get_eta_service() -> EtaModelService:
     return _eta_service
 
 
-@app.get("/health")
+@fastapi_app.get("/health")
 def health() -> dict:
     database = database_health()
     return {"status": "ok", "model_loaded": MODEL_PATH.exists(), "database": database, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
-@app.get("/analysis", tags=["admin"], dependencies=[Depends(require_admin)])
+@fastapi_app.get("/analysis", tags=["admin"], dependencies=[Depends(require_admin)])
 def analysis() -> dict:
     return build_analysis()
 
 
-@app.post("/predict-eta", response_model=EtaResponse)
+@fastapi_app.post("/predict-eta", response_model=EtaResponse)
 def predict_eta(request: EtaRequest) -> EtaResponse:
     try:
         service = get_eta_service()
@@ -102,7 +102,7 @@ def predict_eta(request: EtaRequest) -> EtaResponse:
     )
 
 
-@app.post("/assign-driver", response_model=AssignmentResponse)
+@fastapi_app.post("/assign-driver", response_model=AssignmentResponse)
 def assign_driver(request: AssignmentRequest) -> AssignmentResponse:
     try:
         service = get_eta_service()
@@ -128,4 +128,5 @@ def assign_driver(request: AssignmentRequest) -> AssignmentResponse:
     )
 
 
-socket_app = create_socket_app(app, allowed_origins)
+socket_app = create_socket_app(fastapi_app)
+app = socket_app

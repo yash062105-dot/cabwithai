@@ -36,22 +36,29 @@ async def emit_booking_status(booking: dict) -> None:
     if _socket_server is None:
         return
     try:
+        payload = {
+            "booking_id": str(booking["_id"]),
+            "status": booking["status"],
+            "updated_at": booking["updated_at"].isoformat(),
+        }
         await _socket_server.emit(
             "booking_status",
-            {
-                "booking_id": str(booking["_id"]),
-                "status": booking["status"],
-                "updated_at": booking["updated_at"].isoformat(),
-            },
+            payload,
             room=booking_room(booking["user_id"], str(booking["_id"])),
         )
+        if booking.get("driver_id"):
+            await _socket_server.emit(
+                "booking_status",
+                payload,
+                room=driver_room(booking["driver_id"]),
+            )
     except Exception:
         logger.exception("Could not broadcast booking status update")
 
 
-def create_socket_app(fastapi_app, allowed_origins: list[str]):
+def create_socket_app(fastapi_app):
     global _socket_server
-    sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=allowed_origins)
+    sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins=[])
     _socket_server = sio
 
     async def get_session(sid: str) -> dict | None:
@@ -64,6 +71,7 @@ def create_socket_app(fastapi_app, allowed_origins: list[str]):
     async def connect(sid, environ, auth):
         token = auth.get("token") if isinstance(auth, dict) else None
         if not token:
+            logger.warning("Socket.IO connection rejected: missing auth token")
             return False
         try:
             payload = decode_token(token)
@@ -71,12 +79,16 @@ def create_socket_app(fastapi_app, allowed_origins: list[str]):
             db = get_database()
             if role == "driver":
                 driver_id = payload.get("driver_id")
-                driver = db.drivers.find_one({"driver_id": driver_id, "role": "driver"})
+                if not driver_id:
+                    logger.warning("Socket.IO driver connection rejected: token has no driver id")
+                    return False
+                driver = db.drivers.find_one({"driver_id": driver_id})
                 if not driver or driver.get("status", "active") != "active":
+                    logger.warning("Socket.IO driver connection rejected: driver is missing or inactive")
                     return False
                 await sio.enter_room(sid, driver_room(driver_id))
                 await sio.save_session(sid, {"role": "driver", "driver_id": driver_id})
-            else:
+            elif role == "user":
                 user = db.users.find_one(
                     {
                         "_id": object_id(payload["sub"]),
@@ -86,11 +98,16 @@ def create_socket_app(fastapi_app, allowed_origins: list[str]):
                         ],
                     }
                 )
-                if not user or user.get("role") not in {"user", "admin"}:
+                if not user:
+                    logger.warning("Socket.IO user connection rejected: user is missing or inactive")
                     return False
-                await sio.save_session(sid, {"role": user.get("role"), "user_id": str(user["_id"])})
+                await sio.save_session(sid, {"role": "user", "user_id": str(user["_id"])})
+            else:
+                logger.warning("Socket.IO connection rejected: unsupported token role %r", role)
+                return False
             return True
         except Exception:
+            logger.exception("Socket.IO authentication failed")
             return False
 
     @sio.event
@@ -129,7 +146,7 @@ def create_socket_app(fastapi_app, allowed_origins: list[str]):
                 raise ValueError
             db = get_database()
             driver = db.drivers.find_one(
-                {"driver_id": session["driver_id"], "role": "driver"},
+                {"driver_id": session["driver_id"]},
                 {"status": 1, "_id": 0},
             )
             if not driver or driver.get("status", "active") != "active":
@@ -139,7 +156,6 @@ def create_socket_app(fastapi_app, allowed_origins: list[str]):
             db.drivers.update_one(
                 {
                     "driver_id": session["driver_id"],
-                    "role": "driver",
                     "$or": [
                         {"status": "active"},
                         {"status": {"$exists": False}},

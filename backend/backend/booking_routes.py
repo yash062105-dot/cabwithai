@@ -11,7 +11,7 @@ from .dependencies import get_current_driver, get_current_user, require_user
 from .ml_service import EtaModelService
 from .mongodb import DatabaseNotConfigured, get_database, object_id
 from .realtime import emit_booking_status, emit_driver_event
-from .schemas import BookingCreateRequest, DriverLocationRequest, RideActionRequest
+from .schemas import BookingCreateRequest, DriverLocationRequest, DriverStatusUpdateRequest, RideActionRequest
 
 router = APIRouter(tags=["bookings"])
 _eta_service: EtaModelService | None = None
@@ -57,7 +57,6 @@ def active_drivers() -> list[dict]:
         get_database().drivers.find(
             {
                 "available": True,
-                "role": "driver",
                 "$or": [
                     {"status": "active"},
                     {"status": {"$exists": False}},
@@ -278,11 +277,19 @@ def set_driver_availability(available: bool, driver: dict = Depends(get_current_
         )
         if not result.matched_count:
             raise HTTPException(status_code=404, detail="Driver not found")
-        return {"driver_id": driver["driver_id"], "available": available}
+        return {"driver_id": driver["driver_id"], "available": available, "online": available}
     except HTTPException:
         raise
     except Exception as exc:
         raise database_error(exc) from exc
+
+
+@router.patch("/driver/status")
+def update_driver_status(request: DriverStatusUpdateRequest, driver: dict = Depends(get_current_driver)) -> dict:
+    is_online = request.online if request.online is not None else request.available
+    if is_online is None:
+        raise HTTPException(status_code=400, detail="Either 'online' or 'available' must be provided")
+    return set_driver_availability(available=is_online, driver=driver)
 
 
 @router.patch("/driver/location")
@@ -292,7 +299,6 @@ def update_driver_location(request: DriverLocationRequest, driver: dict = Depend
         result = get_database().drivers.update_one(
             {
                 "driver_id": driver["driver_id"],
-                "role": "driver",
                 "$or": [
                     {"status": "active"},
                     {"status": {"$exists": False}},
@@ -312,6 +318,20 @@ def update_driver_location(request: DriverLocationRequest, driver: dict = Depend
 @router.get("/bookings/{booking_id}")
 def get_booking(booking_id: str, user: dict = Depends(get_current_user)) -> dict:
     booking = booking_for_user_or_driver(booking_id, user=user)
+    try:
+        driver = get_database().drivers.find_one(
+            {"driver_id": booking["driver_id"]},
+            {"latitude": 1, "longitude": 1, "last_location_at": 1, "_id": 0},
+        )
+    except Exception as exc:
+        raise database_error(exc) from exc
+    booking["driver_location"] = driver
+    return serialize(booking)
+
+
+@router.get("/driver/bookings/{booking_id}")
+def get_driver_booking(booking_id: str, driver_account: dict = Depends(get_current_driver)) -> dict:
+    booking = booking_for_user_or_driver(booking_id, driver=driver_account)
     try:
         driver = get_database().drivers.find_one(
             {"driver_id": booking["driver_id"]},

@@ -23,7 +23,7 @@ interface RideTrackingScreenProps {
 }
 
 const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
-  const {currentRide, refreshBooking, finishCurrentRide, cancelCurrentRide} = useRide();
+  const {currentRide, refreshBooking, updateRideStatus, updateDriverLocation, finishCurrentRide, cancelCurrentRide} = useRide();
   const bookingId = route?.params?.rideId || currentRide?.id;
 
   useEffect(() => {
@@ -36,10 +36,13 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
       );
     };
     refresh();
-    const timer = setInterval(refresh, 15_000);
     connectBookingSocket(
       bookingId,
-      refresh,
+      coordinates => updateDriverLocation(bookingId, coordinates),
+      status => {
+        if (status) updateRideStatus(bookingId, status);
+        refresh();
+      },
       message => {
         if (active) console.warn('Ride update socket:', message);
       },
@@ -58,11 +61,10 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
       });
     return () => {
       active = false;
-      clearInterval(timer);
       socket?.emit('unwatch_booking', {booking_id: bookingId});
       socket?.disconnect();
     };
-  }, [bookingId, refreshBooking]);
+  }, [bookingId, refreshBooking, updateDriverLocation, updateRideStatus]);
 
   if (!currentRide) {
     return (
@@ -95,13 +97,13 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
   const handleNextStep = () => {
     if (ride.status === 'completed' || ride.status === 'cancelled') {
       finishCurrentRide();
-      navigation.replace('Home');
+      navigation.navigate('UserTabs', {screen: 'Home'});
     }
   };
 
   const handleCancel = async () => {
-    await cancelCurrentRide();
-    navigation.replace('Home');
+    const cancelled = await cancelCurrentRide();
+    if (cancelled) navigation.navigate('UserTabs', {screen: 'Home'});
   };
 
   return (
@@ -111,7 +113,7 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
       {/* Screen Header */}
       <ScreenHeader
         title={`Ride #${ride.id.slice(-6)}`}
-        onBack={() => navigation.navigate('Home')}
+        onBack={() => navigation.navigate('UserTabs', {screen: 'Home'})}
       />
 
       <ScrollView
@@ -175,7 +177,6 @@ const RideTrackingScreen = ({navigation, route}: RideTrackingScreenProps) => {
 
               <View style={styles.driverMeta}>
                 <Text style={styles.driverName}>{ride.driver.name}</Text>
-                <Text style={styles.driverRating}>★ 4.9 • Verified CAB Driver</Text>
               </View>
 
               <TouchableOpacity
@@ -380,12 +381,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: fonts.bold,
     fontWeight: '700',
-  },
-  driverRating: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    fontFamily: fonts.medium,
-    marginTop: 2,
   },
   callButton: {
     width: 42,

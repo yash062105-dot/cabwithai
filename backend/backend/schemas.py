@@ -83,19 +83,15 @@ class DriverLocationRequest(BaseModel):
     longitude: float = Field(ge=-180, le=180)
 
 
-class LoginRequest(BaseModel):
-    phone: str | None = Field(default=None, min_length=10, max_length=20)
-    otp: str | None = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
-    email: str | None = None
-    password: str | None = None
+class DriverStatusUpdateRequest(BaseModel):
+    online: bool | None = None
+    available: bool | None = None
 
-    @model_validator(mode="after")
-    def validate_login_method(self):
-        phone_login = bool(self.phone and self.otp)
-        legacy_admin_login = bool(self.email and self.password)
-        if not phone_login and not legacy_admin_login:
-            raise ValueError("Use phone and OTP. Email/password is only a temporary admin compatibility login.")
-        return self
+
+class LoginRequest(BaseModel):
+    phone: str = Field(min_length=10, max_length=20)
+    otp: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    role: Literal["user", "driver"] | None = None
 
 
 class AdminLoginRequest(BaseModel):
@@ -110,7 +106,6 @@ class ForgotPasswordRequest(BaseModel):
 class AdminUserCreateRequest(BaseModel):
     name: str = Field(min_length=2, max_length=100)
     phone: str = Field(min_length=10, max_length=20)
-    role: Literal["admin", "user"] = "user"
 
 
 class DriverCreateRequest(BaseModel):

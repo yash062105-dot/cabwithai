@@ -76,8 +76,6 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
       .catch((error: any) =>
         Alert.alert('Could not load earnings', error.response?.data?.detail || 'Check your connection and try again.'),
       );
-    const timer = setInterval(loadBookings, 5000);
-    return () => clearInterval(timer);
   }, [setDriverOnline, updateDriverProfile]);
 
   useEffect(() => {
@@ -103,6 +101,9 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
         socket = connection.socket;
         sendLocation = connection.sendLocation;
         connection.socket.on('ride_request', loadBookings);
+        connection.socket.on('booking_status', loadBookings);
+        connection.socket.on('connect', loadBookings);
+        loadBookings();
         if (latestCoordinates) connection.sendLocation(latestCoordinates);
       })
       .catch(error => {
@@ -140,7 +141,7 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
   const handleDeclineRide = async () => {
     if (!incomingBooking) return;
     try {
-      await Api.post(`/driver/bookings/${incomingBooking._id}/reject`);
+      await Api.post(`/driver/bookings/${incomingBooking._id}/decline`);
     } catch (error: any) {
       console.warn('Decline error:', error);
     }
@@ -149,8 +150,9 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
 
   const toggleOnline = async () => {
     try {
-      const response = await Api.patch('/driver/status', {online: !driver.isOnline});
-      setDriverOnline(Boolean(response.data.online));
+      const nextOnlineState = !driver.isOnline;
+      const response = await Api.patch(`/driver/availability?available=${nextOnlineState}`);
+      setDriverOnline(Boolean(response.data.online ?? response.data.available));
     } catch (error: any) {
       Alert.alert('Status change failed', error.response?.data?.detail || 'Try again shortly.');
     }
@@ -209,10 +211,6 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
 
             <View style={styles.statDivider} />
 
-            <View style={styles.statBox}>
-              <Text style={styles.statNumber}>★ 4.9</Text>
-              <Text style={styles.statLabel}>RATING</Text>
-            </View>
           </View>
         </View>
 
@@ -256,7 +254,7 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
               <View style={styles.newBadge}>
                 <Text style={styles.newBadgeText}>⚡ NEW TRIP REQUEST</Text>
               </View>
-              <Text style={styles.requestFare}>₹{incomingBooking?.fare || '0'}</Text>
+              <Text style={styles.requestFare}>₹{incomingBooking?.fare_amount ?? incomingBooking?.estimated_fare ?? incomingBooking?.fare ?? '0'}</Text>
             </View>
 
             <View style={styles.riderRow}>
@@ -273,7 +271,7 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
               <View style={styles.routeItem}>
                 <View style={styles.pickupDot} />
                 <Text style={styles.routeText} numberOfLines={1}>
-                  {incomingBooking?.pickup}
+                  {incomingBooking?.pickup_address || incomingBooking?.pickup || 'Pickup location'}
                 </Text>
               </View>
 
@@ -282,28 +280,28 @@ const DriverHomeScreen = ({navigation}: DriverHomeScreenProps) => {
               <View style={styles.routeItem}>
                 <View style={styles.dropSquare} />
                 <Text style={styles.routeText} numberOfLines={1}>
-                  {incomingBooking?.destination}
+                  {incomingBooking?.destination_address || incomingBooking?.destination || 'Destination'}
                 </Text>
               </View>
             </View>
 
             <View style={styles.requestActions}>
-              <Button
-                title="Decline"
-                variant="outline"
-                size="md"
-                onPress={handleDeclineRide}
-                style={styles.declineBtn}
-                fullWidth={false}
-              />
-              <Button
-                title="Accept Ride"
-                variant="primary"
-                size="md"
-                onPress={handleAcceptRide}
-                style={styles.acceptBtn}
-                fullWidth={false}
-              />
+              <View style={styles.requestButtonSlot}>
+                <Button
+                  title="Decline"
+                  variant="outline"
+                  size="md"
+                  onPress={handleDeclineRide}
+                />
+              </View>
+              <View style={[styles.requestButtonSlot, styles.acceptButtonSlot]}>
+                <Button
+                  title="Accept Ride"
+                  variant="primary"
+                  size="md"
+                  onPress={handleAcceptRide}
+                />
+              </View>
             </View>
           </View>
         </View>
@@ -703,11 +701,11 @@ const styles = StyleSheet.create({
     gap: 12,
   },
 
-  declineBtn: {
+  requestButtonSlot: {
     flex: 1,
   },
 
-  acceptBtn: {
+  acceptButtonSlot: {
     flex: 1.5,
   },
 });
